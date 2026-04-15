@@ -1,0 +1,27 @@
+{
+  "aimd": {
+    "algorithm": "aimd",
+    "duration_s": 0.392544333,
+    "throughput_mbps": 0.41737960843266075,
+    "avg_rtt_ms": 35.2537691756217,
+    "retransmissions": 0,
+    "fast_retransmissions": 0,
+    "timeouts": 0,
+    "link_drops": 0,
+    "srtt_ms": 35.2537691756217,
+    "acked_packets": 20
+  },
+  "q_learning": {
+    "algorithm": "q_learning",
+    "duration_s": 0.39134950000000046,
+    "throughput_mbps": 0.4186539142122318,
+    "avg_rtt_ms": 5.980893969535828,
+    "retransmissions": 0,
+    "fast_retransmissions": 0,
+    "timeouts": 0,
+    "link_drops": 0,
+    "srtt_ms": 5.621165724451272,
+    "acked_packets": 20
+  },
+  "results_dir": "/Users/lawrenclia/Documents/files/\u8ba1\u7b97\u673a\u7f51\u7edc/project/test_basic_20260415"
+}

@@ -1,0 +1,3 @@
+algorithm,duration_s,throughput_mbps,avg_rtt_ms,retransmissions,fast_retransmissions,timeouts,link_drops,srtt_ms
+aimd,6.606539459,0.07439901071511938,73.56152490318354,73,23,50,1,73.56152490318354
+q_learning,3.256305083,0.150944087691921,114.60802882839513,4,2,2,2,223.24503024586062

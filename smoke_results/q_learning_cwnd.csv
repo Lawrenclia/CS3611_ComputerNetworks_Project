@@ -1,0 +1,5 @@
+algorithm,time_s,cwnd
+q_learning,0.000000,1.000000
+q_learning,0.081463,2.000000
+q_learning,0.329949,3.000000
+q_learning,0.593471,3.000000
