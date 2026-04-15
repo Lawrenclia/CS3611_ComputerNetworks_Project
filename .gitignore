@@ -1,0 +1,19 @@
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+
+# Editor settings
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
