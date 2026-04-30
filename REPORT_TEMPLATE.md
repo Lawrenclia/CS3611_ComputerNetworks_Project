@@ -1,103 +1,80 @@
-# 题目五报告模板
+# 题目五报告模板：可靠传输底层架构版
 
 ## 1. 题目概述
 
-本项目实现了一个基于 UDP 的应用层可靠传输协议。系统在发送端实现了数据编号、RTT 采样、超时重传、拥塞窗口控制与虚拟瓶颈链路模拟，并对比了传统 AIMD 与 Q-Learning 两种拥塞控制策略。
+本项目基于 UDP Socket 实现应用层可靠传输底层架构，重点展示 Header 封装、ACK 确认、RTO 定时重传和多线程控制。
 
 ## 2. 系统架构
 
-### 2.1 进程划分
+系统由两个进程组成：
 
-- `receiver.py`：负责接收 UDP 数据报、缓存乱序分组，并返回累计 ACK。
-- `sender.py`：负责可靠发送、拥塞控制、数据统计与结果导出。
-- `virtual_link.py`：模拟固定带宽和有限队列的瓶颈链路。
-
-### 2.2 通信流程
-
-1. Sender 生成带序号的数据包并交给 `VirtualLink`。
-2. `VirtualLink` 按固定速率漏出分组，队列满时直接丢包。
-3. Receiver 收到数据包后更新累计确认号并发送 ACK。
-4. Sender 收到 ACK 后更新 RTT/SRTT、滑动窗口和拥塞控制状态。
-5. 若超时或出现 3 个重复 ACK，则触发重传。
+- `sender.py`：发送端，负责构造数据包、维护未确认队列、接收 ACK 和触发超时重传。
+- `receiver.py`：接收端，负责解析数据包、维护接收序号并返回累计 ACK。
+- `protocol.py`：协议层封装模块，负责数据包和 ACK 的二进制格式转换。
 
 ## 3. 协议设计
 
-### 3.1 数据包格式
-
-- Data Packet: `Sequence Number (4B) + Timestamp (8B) + Payload (1024B)`
-- ACK Packet: `ACK Number (4B)`
-
-### 3.2 可靠传输机制
-
-- 发送端维护未确认队列。
-- Receiver 使用累计 ACK。
-- Sender 支持两种重传机制：
-  - RTO 超时重传
-  - 3 个重复 ACK 触发的快速重传
-
-## 4. 拥塞控制设计
-
-### 4.1 AIMD
-
-- 初始 `CWND = 1`
-- 每收到一个新 ACK：`CWND += 1 / CWND`
-- 出现丢包：`CWND = max(1, CWND / 2)`
-
-### 4.2 Q-Learning
-
-状态空间：
-
-- RTT 趋势：减小 / 平稳 / 增大
-- 丢包事件：未发生 / 发生
-- 共 6 个离散状态
-
-动作空间：
-
-- `0`：保持 CWND
-- `1`：`CWND + 1`
-- `2`：`CWND / 2`
-
-奖励函数：
+### 3.1 数据包 Header
 
 ```text
-Reward = 8 * throughput_mbps - 0.015 * avg_rtt_ms - 1.4 * loss_count
+Data Packet = Sequence Number (4B) + Timestamp (8B) + Payload (1024B)
+ACK Packet  = ACK Number (4B, signed)
 ```
 
-## 5. 虚拟瓶颈链路设计
+### 3.2 Header 封装
 
-- 固定发送速率：默认 `100 packets/s`
-- 队列大小：默认 `20`
-- 当发送端瞬时注入数据超过队列容量时：
-  - 已入队数据产生排队时延
-  - 超过队列容量的分组被直接丢弃
+`protocol.py` 使用网络字节序封装 Header：
 
-## 6. 实验结果
+- `pack_data_packet()`：将序号、时间戳和负载打包为 UDP Payload。
+- `unpack_data_packet()`：从 UDP Payload 中解析 Header 与数据。
+- `pack_ack()` / `unpack_ack()`：封装和解析累计 ACK。
 
-建议展示以下图表与指标：
+## 4. 可靠传输机制
 
-- CWND 随时间变化曲线
-- AIMD 与 Q-Learning 的平均吞吐量对比
-- AIMD 与 Q-Learning 的平均 RTT 对比
-- 重传次数、快速重传次数、链路丢包次数
+发送端维护 `unacked` 字典，记录尚未被 ACK 确认的分组：
 
-可直接引用 `results/` 或 `smoke_results/` 中的：
+- Payload
+- 最近一次发送的单调时钟时间
+- 写入 Header 的发送时间戳
+- 当前分组发送次数
 
-- `comparison.png` / `comparison.svg`
-- `metrics.csv`
-- `summary.json`
+接收端维护 `expected_seq`。当收到按序分组时推进 `expected_seq`；当收到乱序分组时暂存；每次收到数据后返回 `expected_seq - 1` 作为累计 ACK。
 
-## 7. 结果分析
+## 5. 定时重传
 
-可从以下角度分析：
+发送端启动独立 Timer 线程周期扫描 `unacked`：
 
-- AIMD 是否呈现典型锯齿形窗口变化
-- Q-Learning 是否能够在低 RTT 和较高吞吐之间取得平衡
-- 虚拟瓶颈链路对 RTT 和丢包的影响
-- 快速重传相对于纯超时重传的优势
+```text
+if now - last_send_monotonic >= RTO:
+    retransmit(packet)
+```
 
-## 8. 不足与改进
+重传时重新写入 Timestamp，更新最近发送时间，并增加发送次数。这样即使 UDP 丢包，发送端也能在 RTO 到期后恢复传输。
 
-- 当前 Q-Table 状态空间仍较粗糙
-- 未引入更精细的乱序恢复策略
-- 可进一步扩展为 DQN/PPO
-- 可加入动态带宽突变场景测试
+## 6. 多线程控制
+
+发送端使用三个执行流协同：
+
+1. 主线程：按照固定滑动窗口发送新分组。
+2. ACK 线程：持续接收 ACK，更新未确认队列。
+3. Timer 线程：定时检查超时分组并重传。
+
+多个线程共享 `unacked`、`acked_packets` 等状态，因此使用 `threading.Lock` 保证互斥访问。
+
+## 7. 运行方式
+
+启动接收端：
+
+```bash
+python3 receiver.py --host 127.0.0.1 --port 9001 --initial-seq 0
+```
+
+启动发送端：
+
+```bash
+python3 sender.py --target-host 127.0.0.1 --target-port 9001 --packets 40 --window-size 8 --rto 0.2
+```
+
+## 8. 总结
+
+本项目保留并实现了题目五中可靠传输最底层的协议骨架：自定义 Header、累计 ACK、未确认队列、RTO 定时重传和多线程控制。该结构可以作为后续扩展文件传输功能的基础。
