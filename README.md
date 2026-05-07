@@ -1,21 +1,24 @@
-# 基于 UDP 的应用层可靠传输底层架构
+# 基于 UDP 的应用层可靠传输与 Q-Learning 智能拥塞控制
 
-本项目保留题目五中的可靠传输底层实现部分，只关注三个核心机制：
+本项目保留题目五中的可靠传输底层实现，并扩展了 Q-Learning 智能拥塞控制器：
 
 - Header 封装：在 UDP Payload 中自定义 `Sequence Number + Timestamp + Payload`。
 - 定时重传：发送端维护未确认队列，超过 RTO 后自动重传。
 - RTT/SRTT 采样：Sender 收到 ACK 后用当前时间减去包头 Timestamp 得到 RTT，并平滑计算 SRTT。
 - 多线程控制：发送线程、ACK 接收线程、定时器线程协同工作。
 - 快速重传与乱序处理：连续 3 个重复 ACK 立即重传缺失分组，接收端缓存乱序到达的数据包。
+- Q-Learning 拥塞控制：发送端按 1 个 RTT 为周期统计 RTT 趋势和丢包事件，用 6 状态 Q-Table 选择 CWND 保持、加 1 或减半。
 
 ## 目录说明
 
 - `protocol.py`：定义数据包和 ACK 的二进制封装/解析。
 - `virtual_link.py`：模拟固定带宽和有限缓存的虚拟瓶颈链路。
+- `congestion_control.py`：实现固定窗口控制器和 Q-Learning 智能拥塞控制器。
 - `sender.py`：可靠发送端，负责滑动窗口发送、ACK 处理和 RTO 重传。
 - `receiver.py`：接收端，负责解析数据包、维护累计 ACK 并返回确认。
-- `题目五实验报告.md`：仅保留可靠传输底层架构说明。
-- `答辩讲稿提纲.md`：仅保留可靠传输部分的答辩讲稿。
+- `train_q_learning.py`：多轮循环训练脚本，复用 Q-Table 并逐轮调整 epsilon。
+- `题目五实验报告.md`：实验报告说明。
+- `答辩讲稿提纲.md`：答辩讲稿提纲。
 
 ## 协议格式
 
@@ -83,16 +86,65 @@ python3 sender.py \
 python3 sender.py --disable-virtual-link
 ```
 
+启用 Q-Learning 智能拥塞控制：
+
+```bash
+python3 sender.py \
+  --target-host 127.0.0.1 \
+  --target-port 9001 \
+  --packets 120 \
+  --window-size 8 \
+  --link-queue-capacity 20 \
+  --link-service-delay-ms 10 \
+  --cc q-learning \
+  --min-window 1 \
+  --max-window 32 \
+  --q-alpha 0.3 \
+  --q-gamma 0.85 \
+  --q-epsilon 0.1 \
+  --q-table q_table.json
+```
+
+为了观察拥塞控制效果，可以让接收端模拟丢包和排队延迟：
+
+```bash
+python3 receiver.py \
+  --host 127.0.0.1 \
+  --port 9001 \
+  --loss-rate 0.08 \
+  --delay-ms 20 \
+  --jitter-ms 10 \
+  --seed 1
+```
+
+发送端日志中的 `[SENDER][CC]` 行会输出当前状态、选择动作、窗口变化、奖励值和 Q 值。
+
+多轮循环训练：
+
+```bash
+python3 train_q_learning.py \
+  --rounds 5 \
+  --packets 120 \
+  --q-table q_table.json \
+  --q-epsilon 0.3 \
+  --epsilon-decay 0.85 \
+  --min-epsilon 0.05
+```
+
 ## 实现要点
 
 1. `protocol.py` 使用 `struct.pack` / `struct.unpack` 完成 Header 与 ACK 的二进制封装。
 2. `sender.py` 使用 `unacked` 字典保存所有未确认分组的 Payload、最近发送时间和发送次数。
-3. 主线程按照固定 `window-size` 发送新分组，避免无限制注入 UDP 数据。
+3. 主线程按照当前 `window_size` 发送新分组，固定窗口模式下不变，Q-Learning 模式下由控制器每个 RTT 周期更新。
 4. ACK 线程持续 `recvfrom()`，收到累计 ACK 后删除所有 `seq <= ack_number` 的未确认分组。
 5. ACK 线程根据被确认分组保存的 `wire_timestamp` 计算 RTT，并使用 `SRTT = 0.875 * SRTT + 0.125 * RTT` 平滑。
 6. Timer 线程周期扫描 `unacked`，若 `now - last_send >= rto`，则重新封包并发送。
 7. ACK 线程统计重复累计 ACK，连续 3 次相同 ACK 时立即快速重传 `ack_number + 1`。
 8. `receiver.py` 维护 `expected_seq`，按序推进累计确认号，乱序分组暂存在缓存集合中。
+9. Q-Learning 状态严格为 6 个：RTT 趋势 `rtt_up/rtt_down/rtt_stable` × 丢包事件 `loss/no_loss`。
+10. Q-Learning 动作为 `0(hold)`、`1(cwnd+1)`、`2(cwnd/2)`，每个 RTT 周期结束时决策下一周期窗口。
+11. 奖励函数为 `R = reward_alpha * 本轮成功吞吐量 - reward_beta * 平均RTT(ms) - reward_gamma * 丢包数量`。
+12. 使用 epsilon-greedy 探索，并用 Bellman 公式实时更新 Q-Table；`--q-table` 可跨多轮保存和加载学习结果。
 
 ## 环境要求
 

@@ -4,6 +4,12 @@ import threading
 import time
 from dataclasses import dataclass
 
+from congestion_control import (
+    ACTION_NAMES,
+    ControlDecision,
+    FixedWindowController,
+    QLearningCongestionController,
+)
 from protocol import PAYLOAD_SIZE, build_payload, pack_data_packet, unpack_ack
 from virtual_link import VirtualFunnelLink
 
@@ -31,6 +37,19 @@ class ReliableSender:
         use_virtual_link: bool = True,
         link_queue_capacity: int = 20,
         link_service_delay_ms: float = 10.0,
+        cc_mode: str = "fixed",
+        min_window: int = 1,
+        max_window: int = 64,
+        q_alpha: float = 0.30,
+        q_gamma: float = 0.85,
+        q_epsilon: float = 0.10,
+        q_table: str | None = None,
+        q_seed: int | None = None,
+        reward_alpha: float = 1.0,
+        reward_beta: float = 0.02,
+        reward_gamma: float = 3.0,
+        rtt_trend_threshold: float = 0.10,
+        min_cycle_seconds: float = 0.001,
     ) -> None:
         self.target = (target_host, target_port)
         self.local = (local_host, local_port)
@@ -57,6 +76,29 @@ class ReliableSender:
         self.use_virtual_link = use_virtual_link
         self.link_queue_capacity = link_queue_capacity
         self.link_service_delay_ms = link_service_delay_ms
+        self.last_congestion_signal_monotonic = 0.0
+
+        if cc_mode == "fixed":
+            self.controller = FixedWindowController(self.window_size)
+        elif cc_mode == "q-learning":
+            self.controller = QLearningCongestionController(
+                initial_window=self.window_size,
+                min_window=min_window,
+                max_window=max(max_window, min_window, self.window_size),
+                alpha=q_alpha,
+                gamma=q_gamma,
+                epsilon=q_epsilon,
+                q_table_path=q_table,
+                seed=q_seed,
+                reward_throughput_weight=reward_alpha,
+                reward_rtt_weight=reward_beta,
+                reward_loss_weight=reward_gamma,
+                rtt_trend_threshold=rtt_trend_threshold,
+                min_cycle_seconds=min_cycle_seconds,
+            )
+            self.window_size = self.controller.current_window
+        else:
+            raise ValueError(f"unsupported congestion controller: {cc_mode}")
 
     def run(self) -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -129,6 +171,8 @@ class ReliableSender:
                     delay=self.link_service_delay_ms,
                 ),
             )
+        self._log("CC", self.controller.summary())
+        self.controller.close()
 
     def _send_new_packet(self, sock: socket.socket, seq: int) -> None:
         payload = build_payload(seq)
@@ -141,7 +185,10 @@ class ReliableSender:
             last_send_monotonic=now,
             wire_timestamp=timestamp,
         )
-        self._log("SEND", f"seq={seq} inflight={len(self.unacked)} window={self.window_size}")
+        self._log(
+            "SEND",
+            f"seq={seq} inflight={len(self.unacked)} window={self.window_size}",
+        )
 
     def _retransmit_packet(
         self,
@@ -169,6 +216,8 @@ class ReliableSender:
                 fast=self.fast_retransmissions,
             ),
         )
+        if reason in {"RTO", "FAST"}:
+            self._notify_congestion_locked(reason, len(self.unacked), now)
 
     def _send_packet(self, sock: socket.socket, packet: bytes) -> None:
         if self.virtual_link is None:
@@ -221,6 +270,13 @@ class ReliableSender:
                     inflight=len(self.unacked),
                 ),
             )
+            decision = self.controller.observe_ack(
+                newly_acked=len(newly_acked),
+                srtt=self.srtt,
+                latest_rtt=latest_rtt,
+                inflight=len(self.unacked),
+            )
+            self._apply_control_decision_locked(decision)
             return
 
         if self.last_ack_number == ack_number:
@@ -253,6 +309,53 @@ class ReliableSender:
                         self._retransmit_packet(sock, seq, state, reason="RTO")
             time.sleep(min(self.rto / 2.0, 0.05))
 
+    def _notify_congestion_locked(
+        self,
+        reason: str,
+        inflight: int,
+        now: float,
+    ) -> None:
+        guard_interval = max(self.srtt or self.rto, 0.05)
+        if now - self.last_congestion_signal_monotonic < guard_interval:
+            return
+        self.last_congestion_signal_monotonic = now
+
+        decision = self.controller.observe_loss(
+            reason=reason,
+            srtt=self.srtt,
+            latest_rtt=self.latest_rtt,
+            inflight=inflight,
+        )
+        self._apply_control_decision_locked(decision)
+
+    def _apply_control_decision_locked(
+        self,
+        decision: ControlDecision | None,
+    ) -> None:
+        if decision is None:
+            return
+        self.window_size = decision.new_window
+        self._log(
+            "CC",
+            "event={event} state={state} action={action}({action_name}) "
+            "window={old}->{new} reward={reward:.3f} q={q:.3f} "
+            "throughput={throughput:.2f}pkt/s avg_rtt_ms={rtt:.2f} "
+            "loss_count={loss_count} loss_ewma={loss:.3f}".format(
+                event=decision.event,
+                state=decision.state,
+                action=decision.action,
+                action_name=ACTION_NAMES.get(decision.action, "unknown"),
+                old=decision.old_window,
+                new=decision.new_window,
+                reward=decision.reward,
+                q=decision.q_value,
+                throughput=decision.throughput,
+                rtt=decision.avg_rtt * 1000.0,
+                loss_count=decision.loss_count,
+                loss=decision.loss_ewma,
+            ),
+        )
+
     def _log(self, category: str, message: str) -> None:
         if not self.verbose:
             return
@@ -273,6 +376,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--link-queue-capacity", type=int, default=20)
     parser.add_argument("--link-service-delay-ms", type=float, default=10.0)
     parser.add_argument("--disable-virtual-link", action="store_true")
+    parser.add_argument(
+        "--cc",
+        choices=("fixed", "q-learning"),
+        default="fixed",
+        help="congestion controller: fixed window or Q-Learning adaptive window",
+    )
+    parser.add_argument("--min-window", type=int, default=1)
+    parser.add_argument("--max-window", type=int, default=64)
+    parser.add_argument("--q-alpha", type=float, default=0.30)
+    parser.add_argument("--q-gamma", type=float, default=0.85)
+    parser.add_argument("--q-epsilon", type=float, default=0.10)
+    parser.add_argument(
+        "--q-table",
+        default=None,
+        help="optional JSON file used to load and save the learned Q table",
+    )
+    parser.add_argument("--q-seed", type=int, default=None)
+    parser.add_argument("--reward-alpha", type=float, default=1.0)
+    parser.add_argument("--reward-beta", type=float, default=0.02)
+    parser.add_argument("--reward-gamma", type=float, default=3.0)
+    parser.add_argument("--rtt-trend-threshold", type=float, default=0.10)
+    parser.add_argument("--min-cycle-seconds", type=float, default=0.001)
     parser.add_argument("--quiet", action="store_true")
     return parser
 
@@ -291,6 +416,22 @@ def main() -> None:
         raise SystemExit("--link-queue-capacity must be positive")
     if args.link_service_delay_ms < 0:
         raise SystemExit("--link-service-delay-ms must be non-negative")
+    if args.min_window <= 0:
+        raise SystemExit("--min-window must be positive")
+    if args.max_window < args.min_window:
+        raise SystemExit("--max-window must be >= --min-window")
+    if not 0.0 <= args.q_alpha <= 1.0:
+        raise SystemExit("--q-alpha must be in [0, 1]")
+    if not 0.0 <= args.q_gamma <= 1.0:
+        raise SystemExit("--q-gamma must be in [0, 1]")
+    if not 0.0 <= args.q_epsilon <= 1.0:
+        raise SystemExit("--q-epsilon must be in [0, 1]")
+    if args.reward_alpha < 0 or args.reward_beta < 0 or args.reward_gamma < 0:
+        raise SystemExit("--reward-alpha, --reward-beta and --reward-gamma must be non-negative")
+    if args.rtt_trend_threshold < 0:
+        raise SystemExit("--rtt-trend-threshold must be non-negative")
+    if args.min_cycle_seconds <= 0:
+        raise SystemExit("--min-cycle-seconds must be positive")
 
     sender = ReliableSender(
         target_host=args.target_host,
@@ -305,6 +446,19 @@ def main() -> None:
         use_virtual_link=not args.disable_virtual_link,
         link_queue_capacity=args.link_queue_capacity,
         link_service_delay_ms=args.link_service_delay_ms,
+        cc_mode=args.cc,
+        min_window=args.min_window,
+        max_window=args.max_window,
+        q_alpha=args.q_alpha,
+        q_gamma=args.q_gamma,
+        q_epsilon=args.q_epsilon,
+        q_table=args.q_table,
+        q_seed=args.q_seed,
+        reward_alpha=args.reward_alpha,
+        reward_beta=args.reward_beta,
+        reward_gamma=args.reward_gamma,
+        rtt_trend_threshold=args.rtt_trend_threshold,
+        min_cycle_seconds=args.min_cycle_seconds,
     )
     sender.run()
 
