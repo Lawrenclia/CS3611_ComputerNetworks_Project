@@ -43,6 +43,11 @@ class ReliableSender:
         self.next_seq = start_seq
         self.acked_packets = 0
         self.retransmissions = 0
+        self.fast_retransmissions = 0
+        self.last_ack_number = None
+        self.duplicate_ack_count = 0
+        self.srtt = None
+        self.latest_rtt = None
         self.finished = False
 
     def run(self) -> None:
@@ -82,11 +87,13 @@ class ReliableSender:
         throughput_mbps = (self.acked_packets * PAYLOAD_SIZE * 8.0) / duration / 1_000_000.0
         self._log(
             "DONE",
-            "acked={acked}/{total} retransmissions={retx} duration={duration:.3f}s "
-            "throughput={throughput:.3f}Mbps".format(
+            "acked={acked}/{total} retransmissions={retx} fast_retransmissions={fast} "
+            "srtt_ms={srtt:.2f} duration={duration:.3f}s throughput={throughput:.3f}Mbps".format(
                 acked=self.acked_packets,
                 total=self.total_packets,
                 retx=self.retransmissions,
+                fast=self.fast_retransmissions,
+                srtt=(self.srtt or 0.0) * 1000.0,
                 duration=duration,
                 throughput=throughput_mbps,
             ),
@@ -105,7 +112,13 @@ class ReliableSender:
         )
         self._log("SEND", f"seq={seq} inflight={len(self.unacked)} window={self.window_size}")
 
-    def _retransmit_packet(self, sock: socket.socket, seq: int, state: PacketState) -> None:
+    def _retransmit_packet(
+        self,
+        sock: socket.socket,
+        seq: int,
+        state: PacketState,
+        reason: str = "RTO",
+    ) -> None:
         now = time.monotonic()
         timestamp = time.time()
         packet = pack_data_packet(seq, timestamp, state.payload)
@@ -114,9 +127,16 @@ class ReliableSender:
         state.wire_timestamp = timestamp
         state.transmissions += 1
         self.retransmissions += 1
+        if reason == "FAST":
+            self.fast_retransmissions += 1
         self._log(
-            "RTO",
-            f"seq={seq} transmissions={state.transmissions} retx_total={self.retransmissions}",
+            reason,
+            "seq={seq} transmissions={tx} retx_total={retx} fast_total={fast}".format(
+                seq=seq,
+                tx=state.transmissions,
+                retx=self.retransmissions,
+                fast=self.fast_retransmissions,
+            ),
         )
 
     def _ack_worker(self, sock: socket.socket) -> None:
@@ -135,25 +155,57 @@ class ReliableSender:
                 continue
 
             with self.lock:
-                newly_acked = sorted(seq for seq in self.unacked if seq <= ack_number)
-                for seq in newly_acked:
-                    del self.unacked[seq]
-                self.acked_packets += len(newly_acked)
+                self._handle_ack_locked(sock, ack_number)
 
-                if newly_acked:
-                    self._log(
-                        "ACK",
-                        "cumulative_ack={ack} newly_acked={count} range={start}-{end} "
-                        "inflight={inflight}".format(
-                            ack=ack_number,
-                            count=len(newly_acked),
-                            start=newly_acked[0],
-                            end=newly_acked[-1],
-                            inflight=len(self.unacked),
-                        ),
-                    )
-                else:
-                    self._log("ACK", f"duplicate_or_old cumulative_ack={ack_number}")
+    def _handle_ack_locked(self, sock: socket.socket, ack_number: int) -> None:
+        newly_acked = sorted(seq for seq in self.unacked if seq <= ack_number)
+        latest_rtt = None
+        wall_now = time.time()
+        for seq in newly_acked:
+            state = self.unacked.pop(seq)
+            latest_rtt = wall_now - state.wire_timestamp
+            self.latest_rtt = latest_rtt
+            self.srtt = latest_rtt if self.srtt is None else (0.875 * self.srtt + 0.125 * latest_rtt)
+        self.acked_packets += len(newly_acked)
+
+        if newly_acked:
+            self.last_ack_number = ack_number
+            self.duplicate_ack_count = 0
+            self._log(
+                "ACK",
+                "cumulative_ack={ack} newly_acked={count} range={start}-{end} "
+                "rtt_ms={rtt:.2f} srtt_ms={srtt:.2f} inflight={inflight}".format(
+                    ack=ack_number,
+                    count=len(newly_acked),
+                    start=newly_acked[0],
+                    end=newly_acked[-1],
+                    rtt=(latest_rtt or 0.0) * 1000.0,
+                    srtt=(self.srtt or 0.0) * 1000.0,
+                    inflight=len(self.unacked),
+                ),
+            )
+            return
+
+        if self.last_ack_number == ack_number:
+            self.duplicate_ack_count += 1
+        else:
+            self.last_ack_number = ack_number
+            self.duplicate_ack_count = 1
+
+        self._log(
+            "ACK",
+            f"duplicate cumulative_ack={ack_number} dup_count={self.duplicate_ack_count}",
+        )
+        if self.duplicate_ack_count < 3:
+            return
+
+        missing_seq = ack_number + 1
+        state = self.unacked.get(missing_seq)
+        if state is None:
+            self._log("FAST", f"skip missing_seq={missing_seq} not_in_unacked")
+        else:
+            self._retransmit_packet(sock, missing_seq, state, reason="FAST")
+        self.duplicate_ack_count = 0
 
     def _timer_worker(self, sock: socket.socket) -> None:
         while not self.stop_event.is_set():
@@ -161,7 +213,7 @@ class ReliableSender:
             with self.lock:
                 for seq, state in list(self.unacked.items()):
                     if now - state.last_send_monotonic >= self.rto:
-                        self._retransmit_packet(sock, seq, state)
+                        self._retransmit_packet(sock, seq, state, reason="RTO")
             time.sleep(min(self.rto / 2.0, 0.05))
 
     def _log(self, category: str, message: str) -> None:

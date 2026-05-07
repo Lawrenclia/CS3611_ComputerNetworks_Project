@@ -2,7 +2,7 @@
 
 ## 1. 题目概述
 
-本项目基于 UDP Socket 实现应用层可靠传输底层架构，重点展示 Header 封装、ACK 确认、RTO 定时重传和多线程控制。
+本项目基于 UDP Socket 实现应用层可靠传输底层架构，重点展示 Header 封装、ACK 确认、RTO 定时重传、RTT/SRTT 采样、多线程控制、快速重传和乱序处理。
 
 ## 2. 系统架构
 
@@ -38,7 +38,7 @@ ACK Packet  = ACK Number (4B, signed)
 - 写入 Header 的发送时间戳
 - 当前分组发送次数
 
-接收端维护 `expected_seq`。当收到按序分组时推进 `expected_seq`；当收到乱序分组时暂存；每次收到数据后返回 `expected_seq - 1` 作为累计 ACK。
+接收端维护 `expected_seq`。当收到按序分组时推进 `expected_seq`；当收到乱序分组时暂存；每次收到数据后返回 `expected_seq - 1` 作为累计 ACK。发送端连续收到 3 个重复 ACK 时，立即快速重传 `ack_number + 1` 对应分组。
 
 ## 5. 定时重传
 
