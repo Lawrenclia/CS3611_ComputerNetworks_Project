@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass
 
 from protocol import PAYLOAD_SIZE, build_payload, pack_data_packet, unpack_ack
+from virtual_link import VirtualFunnelLink
 
 
 @dataclass
@@ -27,6 +28,9 @@ class ReliableSender:
         rto: float,
         verbose: bool = True,
         start_seq: int = 0,
+        use_virtual_link: bool = True,
+        link_queue_capacity: int = 20,
+        link_service_delay_ms: float = 10.0,
     ) -> None:
         self.target = (target_host, target_port)
         self.local = (local_host, local_port)
@@ -49,12 +53,23 @@ class ReliableSender:
         self.srtt = None
         self.latest_rtt = None
         self.finished = False
+        self.virtual_link = None
+        self.use_virtual_link = use_virtual_link
+        self.link_queue_capacity = link_queue_capacity
+        self.link_service_delay_ms = link_service_delay_ms
 
     def run(self) -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(self.local)
         sock.settimeout(0.2)
+        if self.use_virtual_link:
+            self.virtual_link = VirtualFunnelLink(
+                sock,
+                service_delay_ms=self.link_service_delay_ms,
+                queue_capacity=self.link_queue_capacity,
+                verbose=self.verbose,
+            )
 
         ack_thread = threading.Thread(target=self._ack_worker, args=(sock,), daemon=True)
         timer_thread = threading.Thread(target=self._timer_worker, args=(sock,), daemon=True)
@@ -81,6 +96,8 @@ class ReliableSender:
             self.stop_event.set()
             ack_thread.join(timeout=1.0)
             timer_thread.join(timeout=1.0)
+            if self.virtual_link is not None:
+                self.virtual_link.close()
             sock.close()
 
         duration = max(time.monotonic() - started_at, 1e-6)
@@ -98,13 +115,27 @@ class ReliableSender:
                 throughput=throughput_mbps,
             ),
         )
+        if self.virtual_link is not None:
+            stats = self.virtual_link.snapshot()
+            self._log(
+                "VLINK",
+                "enqueued={enqueued} forwarded={forwarded} dropped={dropped} "
+                "max_depth={depth}/{capacity} service_delay_ms={delay:.1f}".format(
+                    enqueued=stats.enqueued_packets,
+                    forwarded=stats.forwarded_packets,
+                    dropped=stats.dropped_packets,
+                    depth=stats.max_queue_depth,
+                    capacity=self.link_queue_capacity,
+                    delay=self.link_service_delay_ms,
+                ),
+            )
 
     def _send_new_packet(self, sock: socket.socket, seq: int) -> None:
         payload = build_payload(seq)
         now = time.monotonic()
         timestamp = time.time()
         packet = pack_data_packet(seq, timestamp, payload)
-        sock.sendto(packet, self.target)
+        self._send_packet(sock, packet)
         self.unacked[seq] = PacketState(
             payload=payload,
             last_send_monotonic=now,
@@ -122,7 +153,7 @@ class ReliableSender:
         now = time.monotonic()
         timestamp = time.time()
         packet = pack_data_packet(seq, timestamp, state.payload)
-        sock.sendto(packet, self.target)
+        self._send_packet(sock, packet)
         state.last_send_monotonic = now
         state.wire_timestamp = timestamp
         state.transmissions += 1
@@ -138,6 +169,12 @@ class ReliableSender:
                 fast=self.fast_retransmissions,
             ),
         )
+
+    def _send_packet(self, sock: socket.socket, packet: bytes) -> None:
+        if self.virtual_link is None:
+            sock.sendto(packet, self.target)
+            return
+        self.virtual_link.sendto(packet, self.target)
 
     def _ack_worker(self, sock: socket.socket) -> None:
         while not self.stop_event.is_set():
@@ -233,6 +270,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-seq", type=int, default=0)
     parser.add_argument("--window-size", type=int, default=8)
     parser.add_argument("--rto", type=float, default=0.20)
+    parser.add_argument("--link-queue-capacity", type=int, default=20)
+    parser.add_argument("--link-service-delay-ms", type=float, default=10.0)
+    parser.add_argument("--disable-virtual-link", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     return parser
 
@@ -247,6 +287,10 @@ def main() -> None:
         raise SystemExit("--start-seq + --packets exceeds signed ACK range")
     if args.rto <= 0:
         raise SystemExit("--rto must be positive")
+    if args.link_queue_capacity <= 0:
+        raise SystemExit("--link-queue-capacity must be positive")
+    if args.link_service_delay_ms < 0:
+        raise SystemExit("--link-service-delay-ms must be non-negative")
 
     sender = ReliableSender(
         target_host=args.target_host,
@@ -258,6 +302,9 @@ def main() -> None:
         rto=args.rto,
         verbose=not args.quiet,
         start_seq=args.start_seq,
+        use_virtual_link=not args.disable_virtual_link,
+        link_queue_capacity=args.link_queue_capacity,
+        link_service_delay_ms=args.link_service_delay_ms,
     )
     sender.run()
 

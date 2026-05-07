@@ -11,6 +11,7 @@
 ## 目录说明
 
 - `protocol.py`：定义数据包和 ACK 的二进制封装/解析。
+- `virtual_link.py`：模拟固定带宽和有限缓存的虚拟瓶颈链路。
 - `sender.py`：可靠发送端，负责滑动窗口发送、ACK 处理和 RTO 重传。
 - `receiver.py`：接收端，负责解析数据包、维护累计 ACK 并返回确认。
 - `题目五实验报告.md`：仅保留可靠传输底层架构说明。
@@ -57,21 +58,30 @@ python3 sender.py \
   --rto 0.2
 ```
 
-## 网页前端
+## 虚拟瓶颈链路
 
-也可以启动本地网页控制台：
+发送端内置了一个虚拟漏斗模块，用来模拟“固定带宽 + 有限队列”的瓶颈链路：
+
+- 默认带宽约为 100 包/秒，即每 10ms 漏出一个包。
+- 默认队列容量为 20 个包，超过容量的分组会直接丢弃。
+- 发送端的 `sendto()` 会先进入虚拟队列，再由后台线程按固定速率真正发送到网卡。
+
+运行示例：
 
 ```bash
-python3 web_app.py
+python3 sender.py \
+  --target-host 127.0.0.1 \
+  --target-port 9001 \
+  --window-size 30 \
+  --link-queue-capacity 20 \
+  --link-service-delay-ms 10
 ```
 
-浏览器打开：
+如果想临时关闭虚拟链路，可加上：
 
-```text
-http://127.0.0.1:8080
+```bash
+python3 sender.py --disable-virtual-link
 ```
-
-网页会调用 `/api/run`，由后端启动本地 UDP 接收线程并运行可靠发送端，最后把 ACK、RTO、吞吐量和收发日志显示在页面上。
 
 ## 实现要点
 
