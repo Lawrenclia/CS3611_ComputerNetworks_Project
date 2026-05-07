@@ -55,6 +55,22 @@ python3 sender.py \
   --rto 0.2
 ```
 
+## 网页前端
+
+也可以启动本地网页控制台：
+
+```bash
+python3 web_app.py
+```
+
+浏览器打开：
+
+```text
+http://127.0.0.1:8080
+```
+
+网页会调用 `/api/run`，由后端启动本地 UDP 接收线程并运行可靠发送端，最后把 ACK、RTO、吞吐量和收发日志显示在页面上。
+
 ## 实现要点
 
 1. `protocol.py` 使用 `struct.pack` / `struct.unpack` 完成 Header 与 ACK 的二进制封装。

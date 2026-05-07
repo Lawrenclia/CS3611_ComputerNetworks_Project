@@ -26,6 +26,7 @@ class ReliableSender:
         window_size: int,
         rto: float,
         verbose: bool = True,
+        start_seq: int = 0,
     ) -> None:
         self.target = (target_host, target_port)
         self.local = (local_host, local_port)
@@ -33,11 +34,13 @@ class ReliableSender:
         self.window_size = max(1, window_size)
         self.rto = rto
         self.verbose = verbose
+        self.start_seq = start_seq
+        self.end_seq = start_seq + total_packets
 
         self.lock = threading.Lock()
         self.stop_event = threading.Event()
         self.unacked: dict[int, PacketState] = {}
-        self.next_seq = 0
+        self.next_seq = start_seq
         self.acked_packets = 0
         self.retransmissions = 0
         self.finished = False
@@ -55,14 +58,14 @@ class ReliableSender:
 
         started_at = time.monotonic()
         try:
-            while True:
+            while not self.stop_event.is_set():
                 with self.lock:
                     if self.acked_packets >= self.total_packets and not self.unacked:
                         self.finished = True
                         break
 
                     while (
-                        self.next_seq < self.total_packets
+                        self.next_seq < self.end_seq
                         and len(self.unacked) < self.window_size
                     ):
                         self._send_new_packet(sock, self.next_seq)
@@ -175,6 +178,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--local-host", default="127.0.0.1")
     parser.add_argument("--local-port", type=int, default=9000)
     parser.add_argument("--packets", type=int, default=40)
+    parser.add_argument("--start-seq", type=int, default=0)
     parser.add_argument("--window-size", type=int, default=8)
     parser.add_argument("--rto", type=float, default=0.20)
     parser.add_argument("--quiet", action="store_true")
@@ -185,6 +189,10 @@ def main() -> None:
     args = build_parser().parse_args()
     if args.packets < 0:
         raise SystemExit("--packets must be non-negative")
+    if args.start_seq < 0:
+        raise SystemExit("--start-seq must be non-negative")
+    if args.start_seq + max(args.packets - 1, 0) > 2_147_483_647:
+        raise SystemExit("--start-seq + --packets exceeds signed ACK range")
     if args.rto <= 0:
         raise SystemExit("--rto must be positive")
 
@@ -197,6 +205,7 @@ def main() -> None:
         window_size=args.window_size,
         rto=args.rto,
         verbose=not args.quiet,
+        start_seq=args.start_seq,
     )
     sender.run()
 
