@@ -2,6 +2,7 @@ import argparse
 import random
 import socket
 import time
+from typing import Optional
 
 from protocol import pack_ack, unpack_data_packet
 
@@ -18,7 +19,7 @@ def run_receiver(
     loss_rate: float = 0.0,
     delay_ms: float = 0.0,
     jitter_ms: float = 0.0,
-    seed: int | None = None,
+    seed: Optional[int] = None,
 ) -> None:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((host, port))

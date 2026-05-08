@@ -3,6 +3,7 @@ import socket
 import threading
 import time
 from dataclasses import dataclass
+from typing import Optional
 
 from congestion_control import (
     ACTION_NAMES,
@@ -43,8 +44,8 @@ class ReliableSender:
         q_alpha: float = 0.30,
         q_gamma: float = 0.85,
         q_epsilon: float = 0.10,
-        q_table: str | None = None,
-        q_seed: int | None = None,
+        q_table: Optional[str] = None,
+        q_seed: Optional[int] = None,
         reward_alpha: float = 1.0,
         reward_beta: float = 0.02,
         reward_gamma: float = 3.0,
@@ -330,7 +331,7 @@ class ReliableSender:
 
     def _apply_control_decision_locked(
         self,
-        decision: ControlDecision | None,
+        decision: Optional[ControlDecision],
     ) -> None:
         if decision is None:
             return

@@ -1,6 +1,7 @@
 import json
 import random
 import time
+import numpy as np
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -17,6 +18,9 @@ ACTION_NAMES = {
     "1": "cwnd+1",
     "2": "cwnd/2",
 }
+
+STATE_INDICES = {s: i for i, s in enumerate(Q_STATES)}
+ACTION_INDICES = {a: i for i, a in enumerate(Q_ACTIONS)}
 
 
 @dataclass
@@ -100,9 +104,8 @@ class QLearningCongestionController:
         self.rtt_trend_threshold = rtt_trend_threshold
         self.min_cycle_seconds = min_cycle_seconds
 
-        self.q_table: dict[str, dict[Action, float]] = {
-            state: {action: 0.0 for action in Q_ACTIONS} for state in Q_STATES
-        }
+        self.q_table_matrix = np.zeros((len(Q_STATES), len(Q_ACTIONS)), dtype=np.float64)
+        
         self.last_state: Optional[str] = None
         self.last_action: Optional[Action] = None
         self.previous_cycle_avg_rtt: Optional[float] = None
@@ -168,8 +171,15 @@ class QLearningCongestionController:
         if not self.q_table_path:
             return
         self.q_table_path.parent.mkdir(parents=True, exist_ok=True)
+        dump_data = {
+            state: {
+                action: float(self.q_table_matrix[STATE_INDICES[state], ACTION_INDICES[action]])
+                for action in Q_ACTIONS
+            }
+            for state in Q_STATES
+        }
         self.q_table_path.write_text(
-            json.dumps(self.q_table, ensure_ascii=False, indent=2, sort_keys=True),
+            json.dumps(dump_data, ensure_ascii=False, indent=2, sort_keys=True),
             encoding="utf-8",
         )
 
@@ -222,12 +232,16 @@ class QLearningCongestionController:
         if self.last_state is None or self.last_action is None:
             return
 
-        values = self._q_values(self.last_state)
-        old_value = values[self.last_action]
-        next_best = max(self._q_values(next_state).values())
-        values[self.last_action] = old_value + self.alpha * (
-            reward + self.gamma * next_best - old_value
-        )
+        s_idx = STATE_INDICES[self.last_state]
+        a_idx = ACTION_INDICES[self.last_action]
+        next_s_idx = STATE_INDICES[next_state]
+
+        # Numpy matrix update for Q-Learning Bellman equation
+        old_value = self.q_table_matrix[s_idx, a_idx]
+        next_best = np.max(self.q_table_matrix[next_s_idx])
+        new_value = old_value + self.alpha * (reward + self.gamma * next_best - old_value)
+        self.q_table_matrix[s_idx, a_idx] = new_value
+        
         self.learning_updates += 1
 
     def _select_action(self, state: str) -> Action:
@@ -299,9 +313,8 @@ class QLearningCongestionController:
         self.cycle_rtt_samples = 0
 
     def _q_values(self, state: str) -> dict[Action, float]:
-        if state not in self.q_table:
-            self.q_table[state] = {action: 0.0 for action in Q_ACTIONS}
-        return self.q_table[state]
+        row = self.q_table_matrix[STATE_INDICES[state]]
+        return {action: float(row[ACTION_INDICES[action]]) for action in Q_ACTIONS}
 
     def _clamp_window(self, window: int) -> int:
         return min(self.max_window, max(self.min_window, int(window)))
@@ -314,6 +327,7 @@ class QLearningCongestionController:
             values = raw.get(state, {})
             if not isinstance(values, dict):
                 continue
-            self.q_table[state] = {
-                action: float(values.get(action, 0.0)) for action in Q_ACTIONS
-            }
+            s_idx = STATE_INDICES[state]
+            for action in Q_ACTIONS:
+                val = float(values.get(action, 0.0))
+                self.q_table_matrix[s_idx, ACTION_INDICES[action]] = val

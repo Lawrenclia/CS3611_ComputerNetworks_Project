@@ -74,13 +74,16 @@ def main() -> None:
                 args.min_epsilon,
                 args.q_epsilon * (args.epsilon_decay ** round_index),
             )
+            local_port = args.sender_port + round_index
+            if local_port == args.receiver_port:
+                local_port += args.rounds + 1
             sender_cmd = [
                 sys.executable,
                 str(root / "sender.py"),
                 "--target-port",
                 str(args.receiver_port),
                 "--local-port",
-                str(args.sender_port + round_index),
+                str(local_port),
                 "--packets",
                 str(args.packets),
                 "--start-seq",
