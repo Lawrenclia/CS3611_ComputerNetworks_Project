@@ -7,6 +7,7 @@ from typing import Optional
 
 from congestion_control import (
     ACTION_NAMES,
+    AIMDCongestionController,
     ControlDecision,
     FixedWindowController,
     QLearningCongestionController,
@@ -81,6 +82,12 @@ class ReliableSender:
 
         if cc_mode == "fixed":
             self.controller = FixedWindowController(self.window_size)
+        elif cc_mode == "aimd":
+            self.controller = AIMDCongestionController(
+                min_window=min_window,
+                max_window=max_window,
+            )
+            self.window_size = self.controller.current_window
         elif cc_mode == "q-learning":
             self.controller = QLearningCongestionController(
                 initial_window=self.window_size,
@@ -379,9 +386,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--disable-virtual-link", action="store_true")
     parser.add_argument(
         "--cc",
-        choices=("fixed", "q-learning"),
+        choices=("fixed", "aimd", "q-learning"),
         default="fixed",
-        help="congestion controller: fixed window or Q-Learning adaptive window",
+        help="congestion controller: fixed window, AIMD/Reno baseline, or Q-Learning adaptive window",
     )
     parser.add_argument("--min-window", type=int, default=1)
     parser.add_argument("--max-window", type=int, default=64)

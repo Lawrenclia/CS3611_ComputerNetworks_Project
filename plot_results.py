@@ -29,7 +29,7 @@ def parse_log(filepath):
 
 def main():
     parser = argparse.ArgumentParser(description="Visualize Performance")
-    parser.add_argument("--log1", default="tx1.log", help="Baseline log file (e.g., fixed window or AIMD)")
+    parser.add_argument("--log1", default="tx1.log", help="AIMD/Reno baseline log file")
     parser.add_argument("--log2", default="tx2.log", help="Q-Learning log file")
     
     args = parser.parse_args()
@@ -39,7 +39,7 @@ def main():
 
     # 1. 绘制 CWND 曲线对比图
     plt.figure(figsize=(10, 5))
-    plt.plot(cwnds1, label='Baseline (AIMD/Fixed)', linestyle='--', color='blue', alpha=0.8)
+    plt.plot(cwnds1, label='AIMD/Reno Baseline', linestyle='--', color='blue', alpha=0.8)
     plt.plot(cwnds2, label='Q-Learning', linewidth=2, color='green')
     plt.title('CWND vs Time (Control Cycles)')
     plt.xlabel('RTT Cycles / Decisions')

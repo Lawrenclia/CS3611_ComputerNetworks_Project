@@ -17,6 +17,8 @@ ACTION_NAMES = {
     "0": "hold",
     "1": "cwnd+1",
     "2": "cwnd/2",
+    "aimd_inc": "cwnd+1/cwnd",
+    "aimd_halve": "cwnd/2",
 }
 
 STATE_INDICES = {s: i for i, s in enumerate(Q_STATES)}
@@ -65,6 +67,98 @@ class FixedWindowController:
 
     def close(self) -> None:
         return None
+
+
+class AIMDCongestionController:
+    def __init__(self, min_window: int = 1, max_window: int = 64) -> None:
+        if min_window <= 0:
+            raise ValueError("min_window must be positive")
+        if max_window < min_window:
+            raise ValueError("max_window must be >= min_window")
+
+        self.min_window = min_window
+        self.max_window = max_window
+        self.cwnd = 1.0
+        self.current_window = 1
+        self.ack_events = 0
+        self.loss_events = 0
+
+    def observe_ack(
+        self,
+        newly_acked: int,
+        srtt: Optional[float],
+        latest_rtt: Optional[float],
+        inflight: int,
+    ) -> Optional[ControlDecision]:
+        if newly_acked <= 0:
+            return None
+
+        old_window = self.current_window
+        for _ in range(newly_acked):
+            self.cwnd += 1.0 / max(self.cwnd, 1.0)
+            self.cwnd = min(self.cwnd, float(self.max_window))
+        self.current_window = self._integer_window()
+        self.ack_events += newly_acked
+
+        return ControlDecision(
+            event="ACK",
+            state="aimd",
+            action="aimd_inc",
+            old_window=old_window,
+            new_window=self.current_window,
+            reward=0.0,
+            q_value=self.cwnd,
+            loss_ewma=0.0,
+            throughput=float(newly_acked),
+            avg_rtt=latest_rtt or srtt or 0.0,
+            loss_count=0,
+        )
+
+    def observe_loss(
+        self,
+        reason: str,
+        srtt: Optional[float],
+        latest_rtt: Optional[float],
+        inflight: int,
+    ) -> Optional[ControlDecision]:
+        if reason != "RTO":
+            return None
+
+        old_window = self.current_window
+        self.cwnd = max(float(self.min_window), self.cwnd / 2.0)
+        self.current_window = self._integer_window()
+        self.loss_events += 1
+
+        return ControlDecision(
+            event=reason,
+            state="aimd",
+            action="aimd_halve",
+            old_window=old_window,
+            new_window=self.current_window,
+            reward=0.0,
+            q_value=self.cwnd,
+            loss_ewma=0.0,
+            throughput=0.0,
+            avg_rtt=latest_rtt or srtt or 0.0,
+            loss_count=1,
+        )
+
+    def summary(self) -> str:
+        return (
+            "cc=aimd window={window} cwnd={cwnd:.3f} ack_events={acks} "
+            "rto_loss_events={losses}"
+        ).format(
+            window=self.current_window,
+            cwnd=self.cwnd,
+            acks=self.ack_events,
+            losses=self.loss_events,
+        )
+
+    def close(self) -> None:
+        return None
+
+    def _integer_window(self) -> int:
+        return min(self.max_window, max(self.min_window, int(self.cwnd)))
 
 
 class QLearningCongestionController:
