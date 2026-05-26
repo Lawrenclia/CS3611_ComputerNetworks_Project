@@ -96,9 +96,13 @@ class CongestionController:
     def save(self) -> None:
         if self.mode != "qlearning" or self.qtable_file is None:
             return
-        data = {"q_table": self.q_table, "epsilon": self.epsilon}
-        self.qtable_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
+        try:
+            self.qtable_file.parent.mkdir(parents=True, exist_ok=True)
+            data = {"q_table": self.q_table, "epsilon": self.epsilon}
+            self.qtable_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except OSError as exc:
+            if self.verbose:
+                print(f"[SENDER][QLEARN] failed to save q-table to {self.qtable_file}: {exc}", flush=True)
     def _choose_action(self, state: int) -> int:
         if random.random() < self.epsilon:
             return random.randrange(3)
@@ -480,6 +484,7 @@ class ReliableSender:
             if self.rtt_history
             else 0.0
         )
+        self.metrics_file.parent.mkdir(parents=True, exist_ok=True)
         with self.metrics_file.open("a", newline="", encoding="utf-8") as file:
             writer = csv.DictWriter(
                 file,
