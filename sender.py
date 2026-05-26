@@ -484,6 +484,7 @@ class ReliableSender:
             if self.rtt_history
             else 0.0
         )
+        self.metrics_file.parent.mkdir(parents=True, exist_ok=True)
         with self.metrics_file.open("a", newline="", encoding="utf-8") as file:
             writer = csv.DictWriter(
                 file,
