@@ -1,0 +1,1111 @@
+[12:24:12][SENDER][SEND] seq=0 inflight=1 window=8
+[12:24:12][SENDER][SEND] seq=1 inflight=2 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=0.06 forwarded_total=1 depth=1 dest=127.0.0.1:9205
+[12:24:12][SENDER][SEND] seq=2 inflight=3 window=8
+[12:24:12][SENDER][SEND] seq=3 inflight=4 window=8
+[12:24:12][SENDER][SEND] seq=4 inflight=5 window=8
+[12:24:12][SENDER][SEND] seq=5 inflight=6 window=8
+[12:24:12][SENDER][SEND] seq=6 inflight=7 window=8
+[12:24:12][SENDER][SEND] seq=7 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=12.48 forwarded_total=2 depth=6 dest=127.0.0.1:9205
+[12:24:12][VLINK][FORWARD] queued_ms=23.04 forwarded_total=3 depth=5 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=0 newly_acked=1 range=0-0 rtt_ms=30.83 srtt_ms=30.83 inflight=7
+[12:24:12][SENDER][SEND] seq=8 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=35.54 forwarded_total=4 depth=5 dest=127.0.0.1:9205
+[12:24:12][VLINK][FORWARD] queued_ms=48.02 forwarded_total=5 depth=4 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=1 newly_acked=1 range=1-1 rtt_ms=48.20 srtt_ms=33.00 inflight=7
+[12:24:12][SENDER][SEND] seq=9 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=60.51 forwarded_total=6 depth=4 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=2 newly_acked=1 range=2-2 rtt_ms=72.01 srtt_ms=37.87 inflight=7
+[12:24:12][VLINK][FORWARD] queued_ms=71.99 forwarded_total=7 depth=3 dest=127.0.0.1:9205
+[12:24:12][SENDER][SEND] seq=10 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=84.49 forwarded_total=8 depth=3 dest=127.0.0.1:9205
+[12:24:12][VLINK][FORWARD] queued_ms=61.40 forwarded_total=9 depth=2 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=3 newly_acked=1 range=3-3 rtt_ms=102.85 srtt_ms=46.00 inflight=7
+[12:24:12][SENDER][SEND] seq=11 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=55.24 forwarded_total=10 depth=2 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=4 newly_acked=1 range=4-4 rtt_ms=115.95 srtt_ms=54.74 inflight=7
+[12:24:12][SENDER][SEND] seq=12 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=48.95 forwarded_total=11 depth=2 dest=127.0.0.1:9205
+[12:24:12][VLINK][FORWARD] queued_ms=30.57 forwarded_total=12 depth=1 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=5 newly_acked=1 range=5-5 rtt_ms=138.78 srtt_ms=65.25 inflight=7
+[12:24:12][SENDER][SEND] seq=13 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=24.95 forwarded_total=13 depth=1 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=6 newly_acked=1 range=6-6 rtt_ms=151.42 srtt_ms=76.02 inflight=7
+[12:24:12][SENDER][SEND] seq=14 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=19.64 forwarded_total=14 depth=1 dest=127.0.0.1:9205
+[12:24:12][VLINK][FORWARD] queued_ms=19.55 forwarded_total=15 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=7 newly_acked=1 range=7-7 rtt_ms=180.91 srtt_ms=89.13 inflight=7
+[12:24:12][SENDER][SEND] seq=15 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=0.05 forwarded_total=16 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=8 newly_acked=1 range=8-8 rtt_ms=179.39 srtt_ms=100.41 inflight=7
+[12:24:12][SENDER][SEND] seq=16 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=0.08 forwarded_total=17 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=9 newly_acked=1 range=9-9 rtt_ms=172.27 srtt_ms=109.39 inflight=7
+[12:24:12][SENDER][SEND] seq=17 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=0.05 forwarded_total=18 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=9 dup_count=1
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=9 dup_count=2
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=9 dup_count=3
+[12:24:12][SENDER][FAST] seq=10 transmissions=2 retx_total=1 fast_total=1
+[12:24:12][VLINK][FORWARD] queued_ms=0.08 forwarded_total=19 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=9 dup_count=1
+[12:24:12][SENDER][RTO] seq=11 transmissions=2 retx_total=2 fast_total=1
+[12:24:12][VLINK][FORWARD] queued_ms=0.11 forwarded_total=20 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=9 dup_count=2
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=9 dup_count=3
+[12:24:12][SENDER][FAST] seq=10 transmissions=3 retx_total=3 fast_total=2
+[12:24:12][VLINK][FORWARD] queued_ms=0.07 forwarded_total=21 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=9 dup_count=1
+[12:24:12][SENDER][RTO] seq=12 transmissions=2 retx_total=4 fast_total=2
+[12:24:12][SENDER][RTO] seq=13 transmissions=2 retx_total=5 fast_total=2
+[12:24:12][SENDER][RTO] seq=14 transmissions=2 retx_total=6 fast_total=2
+[12:24:12][VLINK][FORWARD] queued_ms=0.10 forwarded_total=22 depth=2 dest=127.0.0.1:9205
+[12:24:12][VLINK][FORWARD] queued_ms=12.47 forwarded_total=23 depth=1 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=9 dup_count=2
+[12:24:12][VLINK][FORWARD] queued_ms=23.78 forwarded_total=24 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=17 newly_acked=8 range=10-17 rtt_ms=177.07 srtt_ms=117.69 inflight=0
+[12:24:12][SENDER][SEND] seq=18 inflight=1 window=8
+[12:24:12][SENDER][SEND] seq=19 inflight=2 window=8
+[12:24:12][SENDER][SEND] seq=20 inflight=3 window=8
+[12:24:12][SENDER][SEND] seq=21 inflight=4 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=0.08 forwarded_total=25 depth=3 dest=127.0.0.1:9205
+[12:24:12][SENDER][SEND] seq=22 inflight=5 window=8
+[12:24:12][SENDER][SEND] seq=23 inflight=6 window=8
+[12:24:12][SENDER][SEND] seq=24 inflight=7 window=8
+[12:24:12][SENDER][SEND] seq=25 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=11.28 forwarded_total=26 depth=6 dest=127.0.0.1:9205
+[12:24:12][VLINK][FORWARD] queued_ms=23.73 forwarded_total=27 depth=5 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=17 dup_count=1
+[12:24:12][VLINK][FORWARD] queued_ms=33.88 forwarded_total=28 depth=4 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=17 dup_count=2
+[12:24:12][VLINK][FORWARD] queued_ms=46.31 forwarded_total=29 depth=3 dest=127.0.0.1:9205
+[12:24:12][VLINK][FORWARD] queued_ms=56.72 forwarded_total=30 depth=2 dest=127.0.0.1:9205
+[12:24:12][VLINK][FORWARD] queued_ms=69.17 forwarded_total=31 depth=1 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=17 dup_count=3
+[12:24:12][SENDER][FAST] seq=18 transmissions=2 retx_total=7 fast_total=3
+[12:24:12][VLINK][FORWARD] queued_ms=81.60 forwarded_total=32 depth=1 dest=127.0.0.1:9205
+[12:24:12][VLINK][FORWARD] queued_ms=18.99 forwarded_total=33 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=18 newly_acked=1 range=18-18 rtt_ms=23.22 srtt_ms=105.88 inflight=7
+[12:24:12][SENDER][SEND] seq=26 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=0.95 forwarded_total=34 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=19 newly_acked=1 range=19-19 rtt_ms=124.76 srtt_ms=108.24 inflight=7
+[12:24:12][SENDER][SEND] seq=27 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=0.05 forwarded_total=35 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=20 newly_acked=1 range=20-20 rtt_ms=151.58 srtt_ms=113.66 inflight=7
+[12:24:12][SENDER][SEND] seq=28 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=0.04 forwarded_total=36 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=21 newly_acked=1 range=21-21 rtt_ms=179.04 srtt_ms=121.83 inflight=7
+[12:24:12][SENDER][SEND] seq=29 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=0.04 forwarded_total=37 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] cumulative_ack=22 newly_acked=1 range=22-22 rtt_ms=202.31 srtt_ms=131.89 inflight=7
+[12:24:12][SENDER][SEND] seq=30 inflight=8 window=8
+[12:24:12][VLINK][FORWARD] queued_ms=0.08 forwarded_total=38 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][RTO] seq=23 transmissions=2 retx_total=8 fast_total=3
+[12:24:12][SENDER][RTO] seq=24 transmissions=2 retx_total=9 fast_total=3
+[12:24:12][VLINK][FORWARD] queued_ms=0.09 forwarded_total=39 depth=1 dest=127.0.0.1:9205
+[12:24:12][SENDER][RTO] seq=25 transmissions=2 retx_total=10 fast_total=3
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=22 dup_count=1
+[12:24:12][VLINK][FORWARD] queued_ms=12.45 forwarded_total=40 depth=1 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=22 dup_count=2
+[12:24:12][VLINK][FORWARD] queued_ms=25.05 forwarded_total=41 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=22 dup_count=3
+[12:24:12][SENDER][FAST] seq=23 transmissions=3 retx_total=11 fast_total=4
+[12:24:12][VLINK][FORWARD] queued_ms=0.12 forwarded_total=42 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=22 dup_count=1
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=22 dup_count=2
+[12:24:12][SENDER][RTO] seq=26 transmissions=2 retx_total=12 fast_total=4
+[12:24:12][SENDER][RTO] seq=27 transmissions=2 retx_total=13 fast_total=4
+[12:24:12][VLINK][FORWARD] queued_ms=0.09 forwarded_total=43 depth=1 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=22 dup_count=3
+[12:24:12][SENDER][FAST] seq=23 transmissions=4 retx_total=14 fast_total=5
+[12:24:12][VLINK][FORWARD] queued_ms=12.40 forwarded_total=44 depth=1 dest=127.0.0.1:9205
+[12:24:12][VLINK][FORWARD] queued_ms=16.54 forwarded_total=45 depth=0 dest=127.0.0.1:9205
+[12:24:12][SENDER][ACK] duplicate cumulative_ack=22 dup_count=1
+[12:24:12][SENDER][RTO] seq=28 transmissions=2 retx_total=15 fast_total=5
+[12:24:12][SENDER][RTO] seq=29 transmissions=2 retx_total=16 fast_total=5
+[12:24:12][VLINK][FORWARD] queued_ms=0.12 forwarded_total=46 depth=1 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=22 dup_count=2
+[12:24:13][VLINK][FORWARD] queued_ms=11.72 forwarded_total=47 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=22 dup_count=3
+[12:24:13][SENDER][FAST] seq=23 transmissions=5 retx_total=17 fast_total=6
+[12:24:13][VLINK][FORWARD] queued_ms=0.09 forwarded_total=48 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][RTO] seq=24 transmissions=3 retx_total=18 fast_total=6
+[12:24:13][SENDER][RTO] seq=25 transmissions=3 retx_total=19 fast_total=6
+[12:24:13][VLINK][FORWARD] queued_ms=0.14 forwarded_total=49 depth=1 dest=127.0.0.1:9205
+[12:24:13][SENDER][RTO] seq=30 transmissions=2 retx_total=20 fast_total=6
+[12:24:13][SENDER][ACK] cumulative_ack=29 newly_acked=7 range=23-29 rtt_ms=52.14 srtt_ms=84.47 inflight=1
+[12:24:13][SENDER][SEND] seq=31 inflight=2 window=8
+[12:24:13][SENDER][SEND] seq=32 inflight=3 window=8
+[12:24:13][SENDER][SEND] seq=33 inflight=4 window=8
+[12:24:13][SENDER][SEND] seq=34 inflight=5 window=8
+[12:24:13][SENDER][SEND] seq=35 inflight=6 window=8
+[12:24:13][SENDER][SEND] seq=36 inflight=7 window=8
+[12:24:13][SENDER][SEND] seq=37 inflight=8 window=8
+[12:24:13][VLINK][FORWARD] queued_ms=11.14 forwarded_total=50 depth=8 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=22.69 forwarded_total=51 depth=7 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=29 dup_count=1
+[12:24:13][VLINK][FORWARD] queued_ms=31.54 forwarded_total=52 depth=6 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=43.65 forwarded_total=53 depth=5 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=53.78 forwarded_total=54 depth=4 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=29 dup_count=2
+[12:24:13][VLINK][FORWARD] queued_ms=65.37 forwarded_total=55 depth=3 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=77.82 forwarded_total=56 depth=2 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=29 dup_count=3
+[12:24:13][SENDER][FAST] seq=30 transmissions=3 retx_total=21 fast_total=7
+[12:24:13][VLINK][FORWARD] queued_ms=90.27 forwarded_total=57 depth=2 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=102.72 forwarded_total=58 depth=1 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=29 dup_count=1
+[12:24:13][VLINK][FORWARD] queued_ms=33.78 forwarded_total=59 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=29 dup_count=2
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=29 dup_count=3
+[12:24:13][SENDER][FAST] seq=30 transmissions=4 retx_total=22 fast_total=8
+[12:24:13][VLINK][FORWARD] queued_ms=0.11 forwarded_total=60 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=29 dup_count=1
+[12:24:13][SENDER][RTO] seq=31 transmissions=2 retx_total=23 fast_total=8
+[12:24:13][SENDER][RTO] seq=32 transmissions=2 retx_total=24 fast_total=8
+[12:24:13][VLINK][FORWARD] queued_ms=0.08 forwarded_total=61 depth=1 dest=127.0.0.1:9205
+[12:24:13][SENDER][RTO] seq=33 transmissions=2 retx_total=25 fast_total=8
+[12:24:13][SENDER][RTO] seq=34 transmissions=2 retx_total=26 fast_total=8
+[12:24:13][SENDER][RTO] seq=35 transmissions=2 retx_total=27 fast_total=8
+[12:24:13][SENDER][RTO] seq=36 transmissions=2 retx_total=28 fast_total=8
+[12:24:13][SENDER][RTO] seq=37 transmissions=2 retx_total=29 fast_total=8
+[12:24:13][VLINK][FORWARD] queued_ms=11.80 forwarded_total=62 depth=5 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] cumulative_ack=30 newly_acked=1 range=30-30 rtt_ms=60.43 srtt_ms=81.47 inflight=7
+[12:24:13][SENDER][SEND] seq=38 inflight=8 window=8
+[12:24:13][VLINK][FORWARD] queued_ms=24.03 forwarded_total=63 depth=5 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=36.45 forwarded_total=64 depth=4 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] cumulative_ack=31 newly_acked=1 range=31-31 rtt_ms=39.79 srtt_ms=76.26 inflight=7
+[12:24:13][SENDER][SEND] seq=39 inflight=8 window=8
+[12:24:13][VLINK][FORWARD] queued_ms=48.91 forwarded_total=65 depth=4 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=59.92 forwarded_total=66 depth=3 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] cumulative_ack=32 newly_acked=1 range=32-32 rtt_ms=62.75 srtt_ms=74.57 inflight=7
+[12:24:13][SENDER][SEND] seq=40 inflight=8 window=8
+[12:24:13][VLINK][FORWARD] queued_ms=71.74 forwarded_total=67 depth=3 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=65.94 forwarded_total=68 depth=2 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=32 dup_count=1
+[12:24:13][VLINK][FORWARD] queued_ms=53.30 forwarded_total=69 depth=1 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=41.31 forwarded_total=70 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=32 dup_count=2
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=32 dup_count=3
+[12:24:13][SENDER][FAST] seq=33 transmissions=3 retx_total=30 fast_total=9
+[12:24:13][VLINK][FORWARD] queued_ms=0.04 forwarded_total=71 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=32 dup_count=1
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=32 dup_count=2
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=32 dup_count=3
+[12:24:13][SENDER][FAST] seq=33 transmissions=4 retx_total=31 fast_total=10
+[12:24:13][VLINK][FORWARD] queued_ms=0.05 forwarded_total=72 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][RTO] seq=34 transmissions=3 retx_total=32 fast_total=10
+[12:24:13][SENDER][RTO] seq=35 transmissions=3 retx_total=33 fast_total=10
+[12:24:13][SENDER][RTO] seq=36 transmissions=3 retx_total=34 fast_total=10
+[12:24:13][SENDER][RTO] seq=37 transmissions=3 retx_total=35 fast_total=10
+[12:24:13][VLINK][FORWARD] queued_ms=0.07 forwarded_total=73 depth=3 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=32 dup_count=1
+[12:24:13][VLINK][FORWARD] queued_ms=12.45 forwarded_total=74 depth=2 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=24.94 forwarded_total=75 depth=1 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=32 dup_count=2
+[12:24:13][VLINK][FORWARD] queued_ms=35.16 forwarded_total=76 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][RTO] seq=38 transmissions=2 retx_total=36 fast_total=10
+[12:24:13][SENDER][RTO] seq=39 transmissions=2 retx_total=37 fast_total=10
+[12:24:13][VLINK][FORWARD] queued_ms=0.05 forwarded_total=77 depth=1 dest=127.0.0.1:9205
+[12:24:13][SENDER][RTO] seq=40 transmissions=2 retx_total=38 fast_total=10
+[12:24:13][SENDER][ACK] cumulative_ack=37 newly_acked=5 range=33-37 rtt_ms=60.97 srtt_ms=69.19 inflight=3
+[12:24:13][SENDER][SEND] seq=41 inflight=4 window=8
+[12:24:13][SENDER][SEND] seq=42 inflight=5 window=8
+[12:24:13][SENDER][SEND] seq=43 inflight=6 window=8
+[12:24:13][SENDER][SEND] seq=44 inflight=7 window=8
+[12:24:13][SENDER][SEND] seq=45 inflight=8 window=8
+[12:24:13][VLINK][FORWARD] queued_ms=12.45 forwarded_total=78 depth=6 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=24.88 forwarded_total=79 depth=5 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=37 dup_count=1
+[12:24:13][VLINK][FORWARD] queued_ms=29.57 forwarded_total=80 depth=4 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=42.05 forwarded_total=81 depth=3 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=37 dup_count=2
+[12:24:13][VLINK][FORWARD] queued_ms=54.50 forwarded_total=82 depth=2 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=37 dup_count=3
+[12:24:13][SENDER][FAST] seq=38 transmissions=3 retx_total=39 fast_total=11
+[12:24:13][VLINK][FORWARD] queued_ms=66.45 forwarded_total=83 depth=2 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] cumulative_ack=38 newly_acked=1 range=38-38 rtt_ms=15.86 srtt_ms=62.53 inflight=7
+[12:24:13][VLINK][FORWARD] queued_ms=78.92 forwarded_total=84 depth=1 dest=127.0.0.1:9205
+[12:24:13][SENDER][SEND] seq=46 inflight=8 window=8
+[12:24:13][VLINK][FORWARD] queued_ms=32.33 forwarded_total=85 depth=1 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] cumulative_ack=39 newly_acked=1 range=39-39 rtt_ms=107.84 srtt_ms=68.19 inflight=7
+[12:24:13][VLINK][FORWARD] queued_ms=22.79 forwarded_total=86 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][SEND] seq=47 inflight=8 window=8
+[12:24:13][SENDER][ACK] cumulative_ack=40 newly_acked=1 range=40-40 rtt_ms=121.33 srtt_ms=74.83 inflight=7
+[12:24:13][SENDER][SEND] seq=48 inflight=8 window=8
+[12:24:13][VLINK][FORWARD] queued_ms=11.81 forwarded_total=87 depth=1 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=12.86 forwarded_total=88 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=40 dup_count=1
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=40 dup_count=2
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=40 dup_count=3
+[12:24:13][SENDER][FAST] seq=41 transmissions=2 retx_total=40 fast_total=12
+[12:24:13][VLINK][FORWARD] queued_ms=0.06 forwarded_total=89 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][RTO] seq=42 transmissions=2 retx_total=41 fast_total=12
+[12:24:13][SENDER][RTO] seq=43 transmissions=2 retx_total=42 fast_total=12
+[12:24:13][VLINK][FORWARD] queued_ms=0.05 forwarded_total=90 depth=1 dest=127.0.0.1:9205
+[12:24:13][SENDER][RTO] seq=44 transmissions=2 retx_total=43 fast_total=12
+[12:24:13][SENDER][RTO] seq=45 transmissions=2 retx_total=44 fast_total=12
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=40 dup_count=1
+[12:24:13][VLINK][FORWARD] queued_ms=12.45 forwarded_total=91 depth=2 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=40 dup_count=2
+[12:24:13][VLINK][FORWARD] queued_ms=24.89 forwarded_total=92 depth=1 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=40 dup_count=3
+[12:24:13][SENDER][FAST] seq=41 transmissions=3 retx_total=45 fast_total=13
+[12:24:13][VLINK][FORWARD] queued_ms=36.78 forwarded_total=93 depth=1 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=11.05 forwarded_total=94 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=40 dup_count=1
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=40 dup_count=2
+[12:24:13][SENDER][ACK] cumulative_ack=41 newly_acked=1 range=41-41 rtt_ms=63.79 srtt_ms=73.45 inflight=7
+[12:24:13][SENDER][SEND] seq=49 inflight=8 window=8
+[12:24:13][VLINK][FORWARD] queued_ms=0.10 forwarded_total=95 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][RTO] seq=46 transmissions=2 retx_total=46 fast_total=13
+[12:24:13][SENDER][RTO] seq=47 transmissions=2 retx_total=47 fast_total=13
+[12:24:13][VLINK][FORWARD] queued_ms=3.38 forwarded_total=96 depth=1 dest=127.0.0.1:9205
+[12:24:13][VLINK][FORWARD] queued_ms=15.78 forwarded_total=97 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=41 dup_count=1
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=41 dup_count=2
+[12:24:13][SENDER][RTO] seq=48 transmissions=2 retx_total=48 fast_total=13
+[12:24:13][VLINK][FORWARD] queued_ms=0.14 forwarded_total=98 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=41 dup_count=3
+[12:24:13][SENDER][FAST] seq=42 transmissions=3 retx_total=49 fast_total=14
+[12:24:13][VLINK][FORWARD] queued_ms=0.05 forwarded_total=99 depth=0 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=41 dup_count=1
+[12:24:13][SENDER][RTO] seq=43 transmissions=3 retx_total=50 fast_total=14
+[12:24:13][SENDER][RTO] seq=44 transmissions=3 retx_total=51 fast_total=14
+[12:24:13][VLINK][FORWARD] queued_ms=0.09 forwarded_total=100 depth=1 dest=127.0.0.1:9205
+[12:24:13][SENDER][RTO] seq=45 transmissions=3 retx_total=52 fast_total=14
+[12:24:13][VLINK][FORWARD] queued_ms=10.48 forwarded_total=101 depth=1 dest=127.0.0.1:9205
+[12:24:13][SENDER][ACK] duplicate cumulative_ack=41 dup_count=2
+[12:24:13][VLINK][FORWARD] queued_ms=22.30 forwarded_total=102 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=41 dup_count=3
+[12:24:14][SENDER][FAST] seq=42 transmissions=4 retx_total=53 fast_total=15
+[12:24:14][VLINK][FORWARD] queued_ms=0.06 forwarded_total=103 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=41 dup_count=1
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=41 dup_count=2
+[12:24:14][SENDER][RTO] seq=46 transmissions=3 retx_total=54 fast_total=15
+[12:24:14][SENDER][RTO] seq=47 transmissions=3 retx_total=55 fast_total=15
+[12:24:14][SENDER][RTO] seq=49 transmissions=2 retx_total=56 fast_total=15
+[12:24:14][VLINK][FORWARD] queued_ms=0.08 forwarded_total=104 depth=2 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=11.22 forwarded_total=105 depth=1 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=22.26 forwarded_total=106 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=41 dup_count=3
+[12:24:14][SENDER][FAST] seq=42 transmissions=5 retx_total=57 fast_total=16
+[12:24:14][VLINK][FORWARD] queued_ms=12.14 forwarded_total=107 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=41 dup_count=1
+[12:24:14][SENDER][RTO] seq=48 transmissions=3 retx_total=58 fast_total=16
+[12:24:14][VLINK][FORWARD] queued_ms=0.06 forwarded_total=108 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=41 dup_count=2
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=41 dup_count=3
+[12:24:14][SENDER][FAST] seq=42 transmissions=6 retx_total=59 fast_total=17
+[12:24:14][VLINK][FORWARD] queued_ms=0.07 forwarded_total=109 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=41 dup_count=1
+[12:24:14][SENDER][RTO] seq=43 transmissions=4 retx_total=60 fast_total=17
+[12:24:14][SENDER][RTO] seq=44 transmissions=4 retx_total=61 fast_total=17
+[12:24:14][SENDER][RTO] seq=45 transmissions=4 retx_total=62 fast_total=17
+[12:24:14][VLINK][FORWARD] queued_ms=0.07 forwarded_total=110 depth=2 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=41 dup_count=2
+[12:24:14][VLINK][FORWARD] queued_ms=10.08 forwarded_total=111 depth=1 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=20.71 forwarded_total=112 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=41 dup_count=3
+[12:24:14][SENDER][FAST] seq=42 transmissions=7 retx_total=63 fast_total=18
+[12:24:14][VLINK][FORWARD] queued_ms=0.07 forwarded_total=113 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] cumulative_ack=49 newly_acked=8 range=42-49 rtt_ms=164.84 srtt_ms=98.83 inflight=0
+[12:24:14][SENDER][SEND] seq=50 inflight=1 window=8
+[12:24:14][SENDER][SEND] seq=51 inflight=2 window=8
+[12:24:14][SENDER][SEND] seq=52 inflight=3 window=8
+[12:24:14][SENDER][SEND] seq=53 inflight=4 window=8
+[12:24:14][VLINK][FORWARD] queued_ms=0.08 forwarded_total=114 depth=3 dest=127.0.0.1:9205
+[12:24:14][SENDER][SEND] seq=54 inflight=5 window=8
+[12:24:14][SENDER][SEND] seq=55 inflight=6 window=8
+[12:24:14][SENDER][SEND] seq=56 inflight=7 window=8
+[12:24:14][SENDER][SEND] seq=57 inflight=8 window=8
+[12:24:14][VLINK][FORWARD] queued_ms=11.54 forwarded_total=115 depth=6 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=22.68 forwarded_total=116 depth=5 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=49 dup_count=1
+[12:24:14][VLINK][FORWARD] queued_ms=35.14 forwarded_total=117 depth=4 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=47.64 forwarded_total=118 depth=3 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=49 dup_count=2
+[12:24:14][VLINK][FORWARD] queued_ms=60.06 forwarded_total=119 depth=2 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=49 dup_count=3
+[12:24:14][SENDER][FAST] seq=50 transmissions=2 retx_total=64 fast_total=19
+[12:24:14][VLINK][FORWARD] queued_ms=72.53 forwarded_total=120 depth=2 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=85.01 forwarded_total=121 depth=1 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=49 dup_count=1
+[12:24:14][VLINK][FORWARD] queued_ms=25.37 forwarded_total=122 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=49 dup_count=2
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=49 dup_count=3
+[12:24:14][SENDER][FAST] seq=50 transmissions=3 retx_total=65 fast_total=20
+[12:24:14][VLINK][FORWARD] queued_ms=0.09 forwarded_total=123 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=49 dup_count=1
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=49 dup_count=2
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=49 dup_count=3
+[12:24:14][SENDER][FAST] seq=50 transmissions=4 retx_total=66 fast_total=21
+[12:24:14][VLINK][FORWARD] queued_ms=0.07 forwarded_total=124 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][RTO] seq=51 transmissions=2 retx_total=67 fast_total=21
+[12:24:14][SENDER][RTO] seq=52 transmissions=2 retx_total=68 fast_total=21
+[12:24:14][SENDER][RTO] seq=53 transmissions=2 retx_total=69 fast_total=21
+[12:24:14][SENDER][RTO] seq=54 transmissions=2 retx_total=70 fast_total=21
+[12:24:14][SENDER][RTO] seq=55 transmissions=2 retx_total=71 fast_total=21
+[12:24:14][SENDER][RTO] seq=56 transmissions=2 retx_total=72 fast_total=21
+[12:24:14][SENDER][RTO] seq=57 transmissions=2 retx_total=73 fast_total=21
+[12:24:14][VLINK][FORWARD] queued_ms=1.28 forwarded_total=125 depth=6 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=49 dup_count=1
+[12:24:14][VLINK][FORWARD] queued_ms=13.69 forwarded_total=126 depth=5 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=25.71 forwarded_total=127 depth=4 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=35.96 forwarded_total=128 depth=3 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=49 dup_count=2
+[12:24:14][VLINK][FORWARD] queued_ms=48.42 forwarded_total=129 depth=2 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=49 dup_count=3
+[12:24:14][SENDER][FAST] seq=50 transmissions=5 retx_total=74 fast_total=22
+[12:24:14][VLINK][FORWARD] queued_ms=60.62 forwarded_total=130 depth=2 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=73.08 forwarded_total=131 depth=1 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=24.86 forwarded_total=132 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=49 dup_count=1
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=49 dup_count=2
+[12:24:14][SENDER][ACK] cumulative_ack=50 newly_acked=1 range=50-50 rtt_ms=79.04 srtt_ms=96.36 inflight=7
+[12:24:14][SENDER][SEND] seq=58 inflight=8 window=8
+[12:24:14][VLINK][FORWARD] queued_ms=0.21 forwarded_total=133 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] cumulative_ack=51 newly_acked=1 range=51-51 rtt_ms=172.50 srtt_ms=105.88 inflight=7
+[12:24:14][SENDER][SEND] seq=59 inflight=8 window=8
+[12:24:14][VLINK][FORWARD] queued_ms=0.08 forwarded_total=134 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] cumulative_ack=52 newly_acked=1 range=52-52 rtt_ms=202.13 srtt_ms=117.91 inflight=7
+[12:24:14][SENDER][SEND] seq=60 inflight=8 window=8
+[12:24:14][VLINK][FORWARD] queued_ms=0.09 forwarded_total=135 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][RTO] seq=53 transmissions=3 retx_total=75 fast_total=22
+[12:24:14][SENDER][RTO] seq=54 transmissions=3 retx_total=76 fast_total=22
+[12:24:14][SENDER][RTO] seq=55 transmissions=3 retx_total=77 fast_total=22
+[12:24:14][SENDER][RTO] seq=56 transmissions=3 retx_total=78 fast_total=22
+[12:24:14][SENDER][RTO] seq=57 transmissions=3 retx_total=79 fast_total=22
+[12:24:14][VLINK][FORWARD] queued_ms=0.73 forwarded_total=136 depth=4 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] cumulative_ack=53 newly_acked=1 range=53-53 rtt_ms=3.46 srtt_ms=103.60 inflight=7
+[12:24:14][SENDER][SEND] seq=61 inflight=8 window=8
+[12:24:14][VLINK][FORWARD] queued_ms=13.28 forwarded_total=137 depth=4 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] cumulative_ack=54 newly_acked=1 range=54-54 rtt_ms=21.58 srtt_ms=93.35 inflight=7
+[12:24:14][SENDER][SEND] seq=62 inflight=8 window=8
+[12:24:14][VLINK][FORWARD] queued_ms=26.01 forwarded_total=138 depth=4 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=38.23 forwarded_total=139 depth=3 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] cumulative_ack=55 newly_acked=1 range=55-55 rtt_ms=48.27 srtt_ms=87.71 inflight=7
+[12:24:14][VLINK][FORWARD] queued_ms=49.72 forwarded_total=140 depth=2 dest=127.0.0.1:9205
+[12:24:14][SENDER][SEND] seq=63 inflight=8 window=8
+[12:24:14][VLINK][FORWARD] queued_ms=54.12 forwarded_total=141 depth=2 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] cumulative_ack=56 newly_acked=1 range=56-56 rtt_ms=67.27 srtt_ms=85.16 inflight=7
+[12:24:14][SENDER][SEND] seq=64 inflight=8 window=8
+[12:24:14][VLINK][FORWARD] queued_ms=47.75 forwarded_total=142 depth=2 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=35.78 forwarded_total=143 depth=1 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] cumulative_ack=57 newly_acked=1 range=57-57 rtt_ms=87.14 srtt_ms=85.40 inflight=7
+[12:24:14][SENDER][SEND] seq=65 inflight=8 window=8
+[12:24:14][VLINK][FORWARD] queued_ms=29.43 forwarded_total=144 depth=1 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=21.86 forwarded_total=145 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=57 dup_count=1
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=57 dup_count=2
+[12:24:14][SENDER][RTO] seq=58 transmissions=2 retx_total=80 fast_total=22
+[12:24:14][SENDER][RTO] seq=59 transmissions=2 retx_total=81 fast_total=22
+[12:24:14][VLINK][FORWARD] queued_ms=0.13 forwarded_total=146 depth=1 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=57 dup_count=3
+[12:24:14][SENDER][FAST] seq=58 transmissions=3 retx_total=82 fast_total=23
+[12:24:14][VLINK][FORWARD] queued_ms=12.40 forwarded_total=147 depth=1 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=57 dup_count=1
+[12:24:14][VLINK][FORWARD] queued_ms=20.04 forwarded_total=148 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=57 dup_count=2
+[12:24:14][SENDER][RTO] seq=60 transmissions=2 retx_total=83 fast_total=23
+[12:24:14][SENDER][RTO] seq=61 transmissions=2 retx_total=84 fast_total=23
+[12:24:14][VLINK][FORWARD] queued_ms=0.18 forwarded_total=149 depth=1 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=11.13 forwarded_total=150 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=57 dup_count=3
+[12:24:14][SENDER][FAST] seq=58 transmissions=4 retx_total=85 fast_total=24
+[12:24:14][VLINK][FORWARD] queued_ms=7.85 forwarded_total=151 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=57 dup_count=1
+[12:24:14][SENDER][RTO] seq=62 transmissions=2 retx_total=86 fast_total=24
+[12:24:14][SENDER][RTO] seq=63 transmissions=2 retx_total=87 fast_total=24
+[12:24:14][VLINK][FORWARD] queued_ms=0.12 forwarded_total=152 depth=1 dest=127.0.0.1:9205
+[12:24:14][VLINK][FORWARD] queued_ms=11.30 forwarded_total=153 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=57 dup_count=2
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=57 dup_count=3
+[12:24:14][SENDER][FAST] seq=58 transmissions=5 retx_total=88 fast_total=25
+[12:24:14][VLINK][FORWARD] queued_ms=0.08 forwarded_total=154 depth=0 dest=127.0.0.1:9205
+[12:24:14][SENDER][RTO] seq=64 transmissions=2 retx_total=89 fast_total=25
+[12:24:14][SENDER][RTO] seq=65 transmissions=2 retx_total=90 fast_total=25
+[12:24:14][VLINK][FORWARD] queued_ms=0.14 forwarded_total=155 depth=1 dest=127.0.0.1:9205
+[12:24:14][SENDER][ACK] duplicate cumulative_ack=57 dup_count=1
+[12:24:14][VLINK][FORWARD] queued_ms=10.55 forwarded_total=156 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] cumulative_ack=58 newly_acked=1 range=58-58 rtt_ms=63.27 srtt_ms=82.64 inflight=7
+[12:24:15][SENDER][SEND] seq=66 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=0.13 forwarded_total=157 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][RTO] seq=59 transmissions=3 retx_total=91 fast_total=25
+[12:24:15][SENDER][ACK] cumulative_ack=59 newly_acked=1 range=59-59 rtt_ms=0.38 srtt_ms=72.36 inflight=7
+[12:24:15][VLINK][FORWARD] queued_ms=0.18 forwarded_total=158 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][SEND] seq=67 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=11.88 forwarded_total=159 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] cumulative_ack=60 newly_acked=1 range=60-60 rtt_ms=193.27 srtt_ms=87.47 inflight=7
+[12:24:15][SENDER][SEND] seq=68 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=0.07 forwarded_total=160 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=60 dup_count=1
+[12:24:15][SENDER][RTO] seq=61 transmissions=3 retx_total=92 fast_total=25
+[12:24:15][VLINK][FORWARD] queued_ms=0.60 forwarded_total=161 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=60 dup_count=2
+[12:24:15][SENDER][RTO] seq=62 transmissions=3 retx_total=93 fast_total=25
+[12:24:15][SENDER][RTO] seq=63 transmissions=3 retx_total=94 fast_total=25
+[12:24:15][VLINK][FORWARD] queued_ms=0.13 forwarded_total=162 depth=1 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=60 dup_count=3
+[12:24:15][SENDER][FAST] seq=61 transmissions=4 retx_total=95 fast_total=26
+[12:24:15][VLINK][FORWARD] queued_ms=10.11 forwarded_total=163 depth=1 dest=127.0.0.1:9205
+[12:24:15][VLINK][FORWARD] queued_ms=13.25 forwarded_total=164 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] cumulative_ack=61 newly_acked=1 range=61-61 rtt_ms=15.58 srtt_ms=78.48 inflight=7
+[12:24:15][SENDER][SEND] seq=69 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=8.59 forwarded_total=165 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] cumulative_ack=62 newly_acked=1 range=62-62 rtt_ms=43.89 srtt_ms=74.16 inflight=7
+[12:24:15][SENDER][SEND] seq=70 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=0.15 forwarded_total=166 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][RTO] seq=64 transmissions=3 retx_total=96 fast_total=26
+[12:24:15][SENDER][RTO] seq=65 transmissions=3 retx_total=97 fast_total=26
+[12:24:15][SENDER][ACK] cumulative_ack=63 newly_acked=1 range=63-63 rtt_ms=56.00 srtt_ms=71.89 inflight=7
+[12:24:15][SENDER][SEND] seq=71 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=6.02 forwarded_total=167 depth=2 dest=127.0.0.1:9205
+[12:24:15][VLINK][FORWARD] queued_ms=18.38 forwarded_total=168 depth=1 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] cumulative_ack=64 newly_acked=1 range=64-64 rtt_ms=23.09 srtt_ms=65.79 inflight=7
+[12:24:15][SENDER][SEND] seq=72 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=29.83 forwarded_total=169 depth=1 dest=127.0.0.1:9205
+[12:24:15][VLINK][FORWARD] queued_ms=17.08 forwarded_total=170 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][RTO] seq=66 transmissions=2 retx_total=98 fast_total=26
+[12:24:15][SENDER][RTO] seq=67 transmissions=2 retx_total=99 fast_total=26
+[12:24:15][VLINK][FORWARD] queued_ms=0.12 forwarded_total=171 depth=1 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] cumulative_ack=65 newly_acked=1 range=65-65 rtt_ms=56.35 srtt_ms=64.61 inflight=7
+[12:24:15][SENDER][SEND] seq=73 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=12.45 forwarded_total=172 depth=1 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=65 dup_count=1
+[12:24:15][VLINK][FORWARD] queued_ms=22.38 forwarded_total=173 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=65 dup_count=2
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=65 dup_count=3
+[12:24:15][SENDER][FAST] seq=66 transmissions=3 retx_total=100 fast_total=27
+[12:24:15][VLINK][FORWARD] queued_ms=0.09 forwarded_total=174 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][RTO] seq=68 transmissions=2 retx_total=101 fast_total=27
+[12:24:15][VLINK][FORWARD] queued_ms=9.82 forwarded_total=175 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=65 dup_count=1
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=65 dup_count=2
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=65 dup_count=3
+[12:24:15][SENDER][FAST] seq=66 transmissions=4 retx_total=102 fast_total=28
+[12:24:15][VLINK][FORWARD] queued_ms=0.09 forwarded_total=176 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=65 dup_count=1
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=65 dup_count=2
+[12:24:15][SENDER][RTO] seq=69 transmissions=2 retx_total=103 fast_total=28
+[12:24:15][SENDER][RTO] seq=70 transmissions=2 retx_total=104 fast_total=28
+[12:24:15][SENDER][RTO] seq=71 transmissions=2 retx_total=105 fast_total=28
+[12:24:15][VLINK][FORWARD] queued_ms=0.15 forwarded_total=177 depth=2 dest=127.0.0.1:9205
+[12:24:15][VLINK][FORWARD] queued_ms=17.74 forwarded_total=178 depth=1 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=65 dup_count=3
+[12:24:15][SENDER][FAST] seq=66 transmissions=5 retx_total=106 fast_total=29
+[12:24:15][VLINK][FORWARD] queued_ms=28.63 forwarded_total=179 depth=1 dest=127.0.0.1:9205
+[12:24:15][VLINK][FORWARD] queued_ms=19.17 forwarded_total=180 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][RTO] seq=67 transmissions=3 retx_total=107 fast_total=29
+[12:24:15][SENDER][RTO] seq=72 transmissions=2 retx_total=108 fast_total=29
+[12:24:15][SENDER][RTO] seq=73 transmissions=2 retx_total=109 fast_total=29
+[12:24:15][VLINK][FORWARD] queued_ms=0.29 forwarded_total=181 depth=2 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=65 dup_count=1
+[12:24:15][VLINK][FORWARD] queued_ms=12.68 forwarded_total=182 depth=1 dest=127.0.0.1:9205
+[12:24:15][VLINK][FORWARD] queued_ms=25.06 forwarded_total=183 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] cumulative_ack=66 newly_acked=1 range=66-66 rtt_ms=64.66 srtt_ms=64.62 inflight=7
+[12:24:15][SENDER][SEND] seq=74 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=3.70 forwarded_total=184 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=66 dup_count=1
+[12:24:15][SENDER][RTO] seq=68 transmissions=3 retx_total=110 fast_total=29
+[12:24:15][VLINK][FORWARD] queued_ms=0.08 forwarded_total=185 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] cumulative_ack=67 newly_acked=1 range=67-67 rtt_ms=67.63 srtt_ms=64.99 inflight=7
+[12:24:15][SENDER][SEND] seq=75 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=0.06 forwarded_total=186 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] cumulative_ack=68 newly_acked=1 range=68-68 rtt_ms=29.03 srtt_ms=60.50 inflight=7
+[12:24:15][SENDER][SEND] seq=76 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=0.08 forwarded_total=187 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=68 dup_count=1
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=68 dup_count=2
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=68 dup_count=3
+[12:24:15][SENDER][FAST] seq=69 transmissions=3 retx_total=111 fast_total=30
+[12:24:15][VLINK][FORWARD] queued_ms=0.05 forwarded_total=188 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][RTO] seq=70 transmissions=3 retx_total=112 fast_total=30
+[12:24:15][SENDER][RTO] seq=71 transmissions=3 retx_total=113 fast_total=30
+[12:24:15][VLINK][FORWARD] queued_ms=0.10 forwarded_total=189 depth=1 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=68 dup_count=1
+[12:24:15][VLINK][FORWARD] queued_ms=12.46 forwarded_total=190 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] cumulative_ack=69 newly_acked=1 range=69-69 rtt_ms=52.03 srtt_ms=59.44 inflight=7
+[12:24:15][SENDER][SEND] seq=77 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=0.08 forwarded_total=191 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][RTO] seq=72 transmissions=3 retx_total=114 fast_total=30
+[12:24:15][SENDER][RTO] seq=73 transmissions=3 retx_total=115 fast_total=30
+[12:24:15][VLINK][FORWARD] queued_ms=0.26 forwarded_total=192 depth=1 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] cumulative_ack=70 newly_acked=1 range=70-70 rtt_ms=55.93 srtt_ms=59.00 inflight=7
+[12:24:15][SENDER][SEND] seq=78 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=12.53 forwarded_total=193 depth=1 dest=127.0.0.1:9205
+[12:24:15][VLINK][FORWARD] queued_ms=16.13 forwarded_total=194 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=70 dup_count=1
+[12:24:15][SENDER][RTO] seq=74 transmissions=2 retx_total=116 fast_total=30
+[12:24:15][SENDER][RTO] seq=75 transmissions=2 retx_total=117 fast_total=30
+[12:24:15][VLINK][FORWARD] queued_ms=0.15 forwarded_total=195 depth=1 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=70 dup_count=2
+[12:24:15][VLINK][FORWARD] queued_ms=12.42 forwarded_total=196 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] cumulative_ack=71 newly_acked=1 range=71-71 rtt_ms=119.11 srtt_ms=66.51 inflight=7
+[12:24:15][SENDER][SEND] seq=79 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=4.64 forwarded_total=197 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] cumulative_ack=72 newly_acked=1 range=72-72 rtt_ms=80.86 srtt_ms=68.31 inflight=7
+[12:24:15][SENDER][SEND] seq=80 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=2.43 forwarded_total=198 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=72 dup_count=1
+[12:24:15][SENDER][RTO] seq=76 transmissions=2 retx_total=118 fast_total=30
+[12:24:15][VLINK][FORWARD] queued_ms=0.12 forwarded_total=199 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] cumulative_ack=73 newly_acked=1 range=73-73 rtt_ms=114.82 srtt_ms=74.12 inflight=7
+[12:24:15][SENDER][SEND] seq=81 inflight=8 window=8
+[12:24:15][VLINK][FORWARD] queued_ms=0.06 forwarded_total=200 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=73 dup_count=1
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=73 dup_count=2
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=73 dup_count=3
+[12:24:15][SENDER][FAST] seq=74 transmissions=3 retx_total=119 fast_total=31
+[12:24:15][VLINK][FORWARD] queued_ms=0.07 forwarded_total=201 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=73 dup_count=1
+[12:24:15][SENDER][RTO] seq=77 transmissions=2 retx_total=120 fast_total=31
+[12:24:15][SENDER][RTO] seq=78 transmissions=2 retx_total=121 fast_total=31
+[12:24:15][VLINK][FORWARD] queued_ms=0.11 forwarded_total=202 depth=1 dest=127.0.0.1:9205
+[12:24:15][VLINK][FORWARD] queued_ms=12.45 forwarded_total=203 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=73 dup_count=2
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=73 dup_count=3
+[12:24:15][SENDER][FAST] seq=74 transmissions=4 retx_total=122 fast_total=32
+[12:24:15][VLINK][FORWARD] queued_ms=0.11 forwarded_total=204 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][RTO] seq=75 transmissions=3 retx_total=123 fast_total=32
+[12:24:15][VLINK][FORWARD] queued_ms=0.14 forwarded_total=205 depth=0 dest=127.0.0.1:9205
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=73 dup_count=1
+[12:24:15][SENDER][ACK] duplicate cumulative_ack=73 dup_count=2
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=73 dup_count=3
+[12:24:16][SENDER][FAST] seq=74 transmissions=5 retx_total=124 fast_total=33
+[12:24:16][VLINK][FORWARD] queued_ms=0.08 forwarded_total=206 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] cumulative_ack=74 newly_acked=1 range=74-74 rtt_ms=13.49 srtt_ms=66.54 inflight=7
+[12:24:16][SENDER][SEND] seq=82 inflight=8 window=8
+[12:24:16][VLINK][FORWARD] queued_ms=0.07 forwarded_total=207 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][RTO] seq=76 transmissions=3 retx_total=125 fast_total=33
+[12:24:16][SENDER][RTO] seq=79 transmissions=2 retx_total=126 fast_total=33
+[12:24:16][SENDER][RTO] seq=80 transmissions=2 retx_total=127 fast_total=33
+[12:24:16][SENDER][RTO] seq=81 transmissions=2 retx_total=128 fast_total=33
+[12:24:16][VLINK][FORWARD] queued_ms=9.94 forwarded_total=208 depth=3 dest=127.0.0.1:9205
+[12:24:16][VLINK][FORWARD] queued_ms=21.53 forwarded_total=209 depth=2 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=74 dup_count=1
+[12:24:16][VLINK][FORWARD] queued_ms=33.97 forwarded_total=210 depth=1 dest=127.0.0.1:9205
+[12:24:16][VLINK][FORWARD] queued_ms=45.83 forwarded_total=211 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] cumulative_ack=75 newly_acked=1 range=75-75 rtt_ms=116.17 srtt_ms=72.75 inflight=7
+[12:24:16][SENDER][SEND] seq=83 inflight=8 window=8
+[12:24:16][VLINK][FORWARD] queued_ms=0.09 forwarded_total=212 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] cumulative_ack=76 newly_acked=1 range=76-76 rtt_ms=92.23 srtt_ms=75.18 inflight=7
+[12:24:16][SENDER][SEND] seq=84 inflight=8 window=8
+[12:24:16][VLINK][FORWARD] queued_ms=0.13 forwarded_total=213 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][RTO] seq=77 transmissions=3 retx_total=129 fast_total=33
+[12:24:16][SENDER][RTO] seq=78 transmissions=3 retx_total=130 fast_total=33
+[12:24:16][VLINK][FORWARD] queued_ms=4.97 forwarded_total=214 depth=1 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=76 dup_count=1
+[12:24:16][VLINK][FORWARD] queued_ms=17.33 forwarded_total=215 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=76 dup_count=2
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=76 dup_count=3
+[12:24:16][SENDER][FAST] seq=77 transmissions=4 retx_total=131 fast_total=34
+[12:24:16][VLINK][FORWARD] queued_ms=0.08 forwarded_total=216 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] cumulative_ack=77 newly_acked=1 range=77-77 rtt_ms=11.72 srtt_ms=67.25 inflight=7
+[12:24:16][SENDER][SEND] seq=85 inflight=8 window=8
+[12:24:16][VLINK][FORWARD] queued_ms=0.12 forwarded_total=217 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=77 dup_count=1
+[12:24:16][SENDER][RTO] seq=79 transmissions=3 retx_total=132 fast_total=34
+[12:24:16][SENDER][RTO] seq=80 transmissions=3 retx_total=133 fast_total=34
+[12:24:16][SENDER][RTO] seq=81 transmissions=3 retx_total=134 fast_total=34
+[12:24:16][SENDER][RTO] seq=82 transmissions=2 retx_total=135 fast_total=34
+[12:24:16][VLINK][FORWARD] queued_ms=0.25 forwarded_total=218 depth=3 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=77 dup_count=2
+[12:24:16][VLINK][FORWARD] queued_ms=11.49 forwarded_total=219 depth=2 dest=127.0.0.1:9205
+[12:24:16][VLINK][FORWARD] queued_ms=21.48 forwarded_total=220 depth=1 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] cumulative_ack=78 newly_acked=1 range=78-78 rtt_ms=139.39 srtt_ms=76.27 inflight=7
+[12:24:16][VLINK][FORWARD] queued_ms=33.52 forwarded_total=221 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][SEND] seq=86 inflight=8 window=8
+[12:24:16][VLINK][FORWARD] queued_ms=10.35 forwarded_total=222 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=78 dup_count=1
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=78 dup_count=2
+[12:24:16][SENDER][ACK] cumulative_ack=79 newly_acked=1 range=79-79 rtt_ms=83.64 srtt_ms=77.19 inflight=7
+[12:24:16][SENDER][SEND] seq=87 inflight=8 window=8
+[12:24:16][VLINK][FORWARD] queued_ms=0.09 forwarded_total=223 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] cumulative_ack=80 newly_acked=1 range=80-80 rtt_ms=97.60 srtt_ms=79.74 inflight=7
+[12:24:16][SENDER][SEND] seq=88 inflight=8 window=8
+[12:24:16][VLINK][FORWARD] queued_ms=0.14 forwarded_total=224 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][RTO] seq=83 transmissions=2 retx_total=136 fast_total=34
+[12:24:16][SENDER][RTO] seq=84 transmissions=2 retx_total=137 fast_total=34
+[12:24:16][VLINK][FORWARD] queued_ms=3.80 forwarded_total=225 depth=1 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=80 dup_count=1
+[12:24:16][VLINK][FORWARD] queued_ms=16.18 forwarded_total=226 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] cumulative_ack=81 newly_acked=1 range=81-81 rtt_ms=132.93 srtt_ms=86.39 inflight=7
+[12:24:16][SENDER][SEND] seq=89 inflight=8 window=8
+[12:24:16][VLINK][FORWARD] queued_ms=0.08 forwarded_total=227 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=81 dup_count=1
+[12:24:16][SENDER][RTO] seq=85 transmissions=2 retx_total=138 fast_total=34
+[12:24:16][VLINK][FORWARD] queued_ms=0.11 forwarded_total=228 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=81 dup_count=2
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=81 dup_count=3
+[12:24:16][SENDER][FAST] seq=82 transmissions=3 retx_total=139 fast_total=35
+[12:24:16][VLINK][FORWARD] queued_ms=0.08 forwarded_total=229 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=81 dup_count=1
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=81 dup_count=2
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=81 dup_count=3
+[12:24:16][SENDER][FAST] seq=82 transmissions=4 retx_total=140 fast_total=36
+[12:24:16][SENDER][RTO] seq=86 transmissions=2 retx_total=141 fast_total=36
+[12:24:16][VLINK][FORWARD] queued_ms=0.09 forwarded_total=230 depth=1 dest=127.0.0.1:9205
+[12:24:16][VLINK][FORWARD] queued_ms=10.50 forwarded_total=231 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] cumulative_ack=82 newly_acked=1 range=82-82 rtt_ms=22.47 srtt_ms=78.40 inflight=7
+[12:24:16][SENDER][SEND] seq=90 inflight=8 window=8
+[12:24:16][VLINK][FORWARD] queued_ms=0.13 forwarded_total=232 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=1
+[12:24:16][SENDER][RTO] seq=83 transmissions=3 retx_total=142 fast_total=36
+[12:24:16][SENDER][RTO] seq=84 transmissions=3 retx_total=143 fast_total=36
+[12:24:16][SENDER][RTO] seq=87 transmissions=2 retx_total=144 fast_total=36
+[12:24:16][SENDER][RTO] seq=88 transmissions=2 retx_total=145 fast_total=36
+[12:24:16][VLINK][FORWARD] queued_ms=0.11 forwarded_total=233 depth=3 dest=127.0.0.1:9205
+[12:24:16][VLINK][FORWARD] queued_ms=10.07 forwarded_total=234 depth=2 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=2
+[12:24:16][VLINK][FORWARD] queued_ms=22.50 forwarded_total=235 depth=1 dest=127.0.0.1:9205
+[12:24:16][VLINK][FORWARD] queued_ms=34.93 forwarded_total=236 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=3
+[12:24:16][SENDER][FAST] seq=83 transmissions=4 retx_total=146 fast_total=37
+[12:24:16][VLINK][FORWARD] queued_ms=2.15 forwarded_total=237 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][RTO] seq=85 transmissions=3 retx_total=147 fast_total=37
+[12:24:16][SENDER][RTO] seq=89 transmissions=2 retx_total=148 fast_total=37
+[12:24:16][VLINK][FORWARD] queued_ms=4.73 forwarded_total=238 depth=1 dest=127.0.0.1:9205
+[12:24:16][VLINK][FORWARD] queued_ms=17.06 forwarded_total=239 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=1
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=2
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=3
+[12:24:16][SENDER][FAST] seq=83 transmissions=5 retx_total=149 fast_total=38
+[12:24:16][VLINK][FORWARD] queued_ms=0.09 forwarded_total=240 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=1
+[12:24:16][SENDER][RTO] seq=86 transmissions=3 retx_total=150 fast_total=38
+[12:24:16][VLINK][FORWARD] queued_ms=0.14 forwarded_total=241 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=2
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=3
+[12:24:16][SENDER][FAST] seq=83 transmissions=6 retx_total=151 fast_total=39
+[12:24:16][VLINK][FORWARD] queued_ms=0.08 forwarded_total=242 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][RTO] seq=84 transmissions=4 retx_total=152 fast_total=39
+[12:24:16][SENDER][RTO] seq=87 transmissions=3 retx_total=153 fast_total=39
+[12:24:16][SENDER][RTO] seq=88 transmissions=3 retx_total=154 fast_total=39
+[12:24:16][SENDER][RTO] seq=90 transmissions=2 retx_total=155 fast_total=39
+[12:24:16][VLINK][FORWARD] queued_ms=11.42 forwarded_total=243 depth=3 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=1
+[12:24:16][VLINK][FORWARD] queued_ms=23.81 forwarded_total=244 depth=2 dest=127.0.0.1:9205
+[12:24:16][VLINK][FORWARD] queued_ms=36.28 forwarded_total=245 depth=1 dest=127.0.0.1:9205
+[12:24:16][VLINK][FORWARD] queued_ms=48.71 forwarded_total=246 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=2
+[12:24:16][SENDER][RTO] seq=85 transmissions=4 retx_total=156 fast_total=39
+[12:24:16][SENDER][RTO] seq=89 transmissions=3 retx_total=157 fast_total=39
+[12:24:16][VLINK][FORWARD] queued_ms=5.86 forwarded_total=247 depth=1 dest=127.0.0.1:9205
+[12:24:16][VLINK][FORWARD] queued_ms=15.95 forwarded_total=248 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=3
+[12:24:16][SENDER][FAST] seq=83 transmissions=7 retx_total=158 fast_total=40
+[12:24:16][VLINK][FORWARD] queued_ms=1.66 forwarded_total=249 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=1
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=2
+[12:24:16][SENDER][ACK] duplicate cumulative_ack=82 dup_count=3
+[12:24:16][SENDER][FAST] seq=83 transmissions=8 retx_total=159 fast_total=41
+[12:24:16][VLINK][FORWARD] queued_ms=0.03 forwarded_total=250 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] cumulative_ack=83 newly_acked=1 range=83-83 rtt_ms=29.48 srtt_ms=72.28 inflight=7
+[12:24:16][SENDER][RTO] seq=86 transmissions=4 retx_total=160 fast_total=41
+[12:24:16][VLINK][FORWARD] queued_ms=0.05 forwarded_total=251 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][SEND] seq=91 inflight=8 window=8
+[12:24:16][VLINK][FORWARD] queued_ms=5.44 forwarded_total=252 depth=0 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] cumulative_ack=88 newly_acked=5 range=84-88 rtt_ms=188.39 srtt_ms=108.60 inflight=3
+[12:24:16][SENDER][SEND] seq=92 inflight=4 window=8
+[12:24:16][SENDER][SEND] seq=93 inflight=5 window=8
+[12:24:16][SENDER][SEND] seq=94 inflight=6 window=8
+[12:24:16][SENDER][SEND] seq=95 inflight=7 window=8
+[12:24:16][SENDER][SEND] seq=96 inflight=8 window=8
+[12:24:16][VLINK][FORWARD] queued_ms=0.04 forwarded_total=253 depth=4 dest=127.0.0.1:9205
+[12:24:16][VLINK][FORWARD] queued_ms=10.43 forwarded_total=254 depth=3 dest=127.0.0.1:9205
+[12:24:16][SENDER][ACK] cumulative_ack=89 newly_acked=1 range=89-89 rtt_ms=161.37 srtt_ms=115.20 inflight=7
+[12:24:16][SENDER][RTO] seq=90 transmissions=3 retx_total=161 fast_total=41
+[12:24:16][VLINK][FORWARD] queued_ms=22.91 forwarded_total=255 depth=3 dest=127.0.0.1:9205
+[12:24:16][SENDER][SEND] seq=97 inflight=8 window=8
+[12:24:16][VLINK][FORWARD] queued_ms=35.41 forwarded_total=256 depth=3 dest=127.0.0.1:9205
+[12:24:17][VLINK][FORWARD] queued_ms=46.37 forwarded_total=257 depth=2 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=89 dup_count=1
+[12:24:17][VLINK][FORWARD] queued_ms=34.66 forwarded_total=258 depth=1 dest=127.0.0.1:9205
+[12:24:17][VLINK][FORWARD] queued_ms=44.31 forwarded_total=259 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=89 dup_count=2
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=89 dup_count=3
+[12:24:17][SENDER][FAST] seq=90 transmissions=4 retx_total=162 fast_total=42
+[12:24:17][VLINK][FORWARD] queued_ms=0.09 forwarded_total=260 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] cumulative_ack=90 newly_acked=1 range=90-90 rtt_ms=28.14 srtt_ms=104.31 inflight=7
+[12:24:17][SENDER][SEND] seq=98 inflight=8 window=8
+[12:24:17][VLINK][FORWARD] queued_ms=0.06 forwarded_total=261 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=1
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=2
+[12:24:17][SENDER][RTO] seq=91 transmissions=2 retx_total=163 fast_total=42
+[12:24:17][VLINK][FORWARD] queued_ms=0.11 forwarded_total=262 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=3
+[12:24:17][SENDER][FAST] seq=91 transmissions=3 retx_total=164 fast_total=43
+[12:24:17][VLINK][FORWARD] queued_ms=0.07 forwarded_total=263 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][RTO] seq=92 transmissions=2 retx_total=165 fast_total=43
+[12:24:17][SENDER][RTO] seq=93 transmissions=2 retx_total=166 fast_total=43
+[12:24:17][SENDER][RTO] seq=94 transmissions=2 retx_total=167 fast_total=43
+[12:24:17][VLINK][FORWARD] queued_ms=0.09 forwarded_total=264 depth=2 dest=127.0.0.1:9205
+[12:24:17][SENDER][RTO] seq=95 transmissions=2 retx_total=168 fast_total=43
+[12:24:17][SENDER][RTO] seq=96 transmissions=2 retx_total=169 fast_total=43
+[12:24:17][SENDER][RTO] seq=97 transmissions=2 retx_total=170 fast_total=43
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=1
+[12:24:17][VLINK][FORWARD] queued_ms=12.46 forwarded_total=265 depth=4 dest=127.0.0.1:9205
+[12:24:17][VLINK][FORWARD] queued_ms=24.23 forwarded_total=266 depth=3 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=2
+[12:24:17][VLINK][FORWARD] queued_ms=36.67 forwarded_total=267 depth=2 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=3
+[12:24:17][SENDER][FAST] seq=91 transmissions=4 retx_total=171 fast_total=44
+[12:24:17][VLINK][FORWARD] queued_ms=46.74 forwarded_total=268 depth=2 dest=127.0.0.1:9205
+[12:24:17][VLINK][FORWARD] queued_ms=58.30 forwarded_total=269 depth=1 dest=127.0.0.1:9205
+[12:24:17][VLINK][FORWARD] queued_ms=30.24 forwarded_total=270 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=1
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=2
+[12:24:17][SENDER][RTO] seq=98 transmissions=2 retx_total=172 fast_total=44
+[12:24:17][VLINK][FORWARD] queued_ms=0.14 forwarded_total=271 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=3
+[12:24:17][SENDER][FAST] seq=91 transmissions=5 retx_total=173 fast_total=45
+[12:24:17][VLINK][FORWARD] queued_ms=8.17 forwarded_total=272 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=1
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=2
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=3
+[12:24:17][SENDER][FAST] seq=91 transmissions=6 retx_total=174 fast_total=46
+[12:24:17][VLINK][FORWARD] queued_ms=0.18 forwarded_total=273 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=1
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=2
+[12:24:17][SENDER][RTO] seq=92 transmissions=3 retx_total=175 fast_total=46
+[12:24:17][SENDER][RTO] seq=93 transmissions=3 retx_total=176 fast_total=46
+[12:24:17][SENDER][RTO] seq=94 transmissions=3 retx_total=177 fast_total=46
+[12:24:17][SENDER][RTO] seq=95 transmissions=3 retx_total=178 fast_total=46
+[12:24:17][VLINK][FORWARD] queued_ms=0.10 forwarded_total=274 depth=3 dest=127.0.0.1:9205
+[12:24:17][SENDER][RTO] seq=96 transmissions=3 retx_total=179 fast_total=46
+[12:24:17][SENDER][RTO] seq=97 transmissions=3 retx_total=180 fast_total=46
+[12:24:17][VLINK][FORWARD] queued_ms=12.44 forwarded_total=275 depth=4 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=3
+[12:24:17][SENDER][FAST] seq=91 transmissions=7 retx_total=181 fast_total=47
+[12:24:17][VLINK][FORWARD] queued_ms=24.49 forwarded_total=276 depth=4 dest=127.0.0.1:9205
+[12:24:17][VLINK][FORWARD] queued_ms=36.95 forwarded_total=277 depth=3 dest=127.0.0.1:9205
+[12:24:17][VLINK][FORWARD] queued_ms=48.89 forwarded_total=278 depth=2 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=1
+[12:24:17][VLINK][FORWARD] queued_ms=61.30 forwarded_total=279 depth=1 dest=127.0.0.1:9205
+[12:24:17][VLINK][FORWARD] queued_ms=49.29 forwarded_total=280 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=2
+[12:24:17][SENDER][RTO] seq=98 transmissions=3 retx_total=182 fast_total=47
+[12:24:17][VLINK][FORWARD] queued_ms=0.13 forwarded_total=281 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=90 dup_count=3
+[12:24:17][SENDER][FAST] seq=91 transmissions=8 retx_total=183 fast_total=48
+[12:24:17][VLINK][FORWARD] queued_ms=10.95 forwarded_total=282 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] cumulative_ack=91 newly_acked=1 range=91-91 rtt_ms=25.36 srtt_ms=94.44 inflight=7
+[12:24:17][SENDER][SEND] seq=99 inflight=8 window=8
+[12:24:17][VLINK][FORWARD] queued_ms=0.15 forwarded_total=283 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] cumulative_ack=92 newly_acked=1 range=92-92 rtt_ms=166.17 srtt_ms=103.41 inflight=7
+[12:24:17][SENDER][SEND] seq=100 inflight=8 window=8
+[12:24:17][VLINK][FORWARD] queued_ms=0.08 forwarded_total=284 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] cumulative_ack=93 newly_acked=1 range=93-93 rtt_ms=192.80 srtt_ms=114.58 inflight=7
+[12:24:17][SENDER][SEND] seq=101 inflight=8 window=8
+[12:24:17][VLINK][FORWARD] queued_ms=0.12 forwarded_total=285 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] cumulative_ack=94 newly_acked=1 range=94-94 rtt_ms=212.70 srtt_ms=126.85 inflight=7
+[12:24:17][SENDER][SEND] seq=102 inflight=8 window=8
+[12:24:17][VLINK][FORWARD] queued_ms=0.10 forwarded_total=286 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][RTO] seq=95 transmissions=4 retx_total=184 fast_total=48
+[12:24:17][SENDER][RTO] seq=96 transmissions=4 retx_total=185 fast_total=48
+[12:24:17][SENDER][RTO] seq=97 transmissions=4 retx_total=186 fast_total=48
+[12:24:17][VLINK][FORWARD] queued_ms=9.53 forwarded_total=287 depth=2 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] cumulative_ack=95 newly_acked=1 range=95-95 rtt_ms=21.99 srtt_ms=113.74 inflight=7
+[12:24:17][VLINK][FORWARD] queued_ms=21.90 forwarded_total=288 depth=1 dest=127.0.0.1:9205
+[12:24:17][SENDER][SEND] seq=103 inflight=8 window=8
+[12:24:17][VLINK][FORWARD] queued_ms=32.71 forwarded_total=289 depth=1 dest=127.0.0.1:9205
+[12:24:17][VLINK][FORWARD] queued_ms=21.06 forwarded_total=290 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] cumulative_ack=96 newly_acked=1 range=96-96 rtt_ms=51.08 srtt_ms=105.91 inflight=7
+[12:24:17][SENDER][SEND] seq=104 inflight=8 window=8
+[12:24:17][VLINK][FORWARD] queued_ms=0.56 forwarded_total=291 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=96 dup_count=1
+[12:24:17][SENDER][RTO] seq=98 transmissions=4 retx_total=187 fast_total=48
+[12:24:17][VLINK][FORWARD] queued_ms=0.15 forwarded_total=292 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] cumulative_ack=97 newly_acked=1 range=97-97 rtt_ms=118.55 srtt_ms=107.49 inflight=7
+[12:24:17][SENDER][SEND] seq=105 inflight=8 window=8
+[12:24:17][VLINK][FORWARD] queued_ms=0.11 forwarded_total=293 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=97 dup_count=1
+[12:24:17][SENDER][RTO] seq=99 transmissions=2 retx_total=188 fast_total=48
+[12:24:17][SENDER][RTO] seq=100 transmissions=2 retx_total=189 fast_total=48
+[12:24:17][VLINK][FORWARD] queued_ms=0.23 forwarded_total=294 depth=1 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] cumulative_ack=98 newly_acked=1 range=98-98 rtt_ms=56.08 srtt_ms=101.06 inflight=7
+[12:24:17][SENDER][SEND] seq=106 inflight=8 window=8
+[12:24:17][VLINK][FORWARD] queued_ms=12.00 forwarded_total=295 depth=1 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=98 dup_count=1
+[12:24:17][VLINK][FORWARD] queued_ms=21.32 forwarded_total=296 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=98 dup_count=2
+[12:24:17][SENDER][RTO] seq=101 transmissions=2 retx_total=190 fast_total=48
+[12:24:17][SENDER][RTO] seq=102 transmissions=2 retx_total=191 fast_total=48
+[12:24:17][VLINK][FORWARD] queued_ms=0.19 forwarded_total=297 depth=1 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=98 dup_count=3
+[12:24:17][SENDER][FAST] seq=99 transmissions=3 retx_total=192 fast_total=49
+[12:24:17][VLINK][FORWARD] queued_ms=12.37 forwarded_total=298 depth=1 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=98 dup_count=1
+[12:24:17][VLINK][FORWARD] queued_ms=23.87 forwarded_total=299 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=98 dup_count=2
+[12:24:17][SENDER][RTO] seq=103 transmissions=2 retx_total=193 fast_total=49
+[12:24:17][SENDER][RTO] seq=104 transmissions=2 retx_total=194 fast_total=49
+[12:24:17][VLINK][FORWARD] queued_ms=0.12 forwarded_total=300 depth=1 dest=127.0.0.1:9205
+[12:24:17][VLINK][FORWARD] queued_ms=11.02 forwarded_total=301 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=98 dup_count=3
+[12:24:17][SENDER][FAST] seq=99 transmissions=4 retx_total=195 fast_total=50
+[12:24:17][VLINK][FORWARD] queued_ms=0.07 forwarded_total=302 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=98 dup_count=1
+[12:24:17][SENDER][RTO] seq=105 transmissions=2 retx_total=196 fast_total=50
+[12:24:17][VLINK][FORWARD] queued_ms=0.13 forwarded_total=303 depth=0 dest=127.0.0.1:9205
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=98 dup_count=2
+[12:24:17][SENDER][ACK] duplicate cumulative_ack=98 dup_count=3
+[12:24:17][SENDER][FAST] seq=99 transmissions=5 retx_total=197 fast_total=51
+[12:24:17][VLINK][FORWARD] queued_ms=0.12 forwarded_total=304 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][RTO] seq=100 transmissions=3 retx_total=198 fast_total=51
+[12:24:18][SENDER][RTO] seq=106 transmissions=2 retx_total=199 fast_total=51
+[12:24:18][VLINK][FORWARD] queued_ms=0.12 forwarded_total=305 depth=1 dest=127.0.0.1:9205
+[12:24:18][VLINK][FORWARD] queued_ms=12.43 forwarded_total=306 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=98 dup_count=1
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=98 dup_count=2
+[12:24:18][SENDER][RTO] seq=101 transmissions=3 retx_total=200 fast_total=51
+[12:24:18][SENDER][RTO] seq=102 transmissions=3 retx_total=201 fast_total=51
+[12:24:18][VLINK][FORWARD] queued_ms=0.14 forwarded_total=307 depth=1 dest=127.0.0.1:9205
+[12:24:18][VLINK][FORWARD] queued_ms=10.24 forwarded_total=308 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=98 dup_count=3
+[12:24:18][SENDER][FAST] seq=99 transmissions=6 retx_total=202 fast_total=52
+[12:24:18][VLINK][FORWARD] queued_ms=4.41 forwarded_total=309 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=98 dup_count=1
+[12:24:18][SENDER][RTO] seq=103 transmissions=3 retx_total=203 fast_total=52
+[12:24:18][SENDER][RTO] seq=104 transmissions=3 retx_total=204 fast_total=52
+[12:24:18][VLINK][FORWARD] queued_ms=0.11 forwarded_total=310 depth=1 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=98 dup_count=2
+[12:24:18][VLINK][FORWARD] queued_ms=12.44 forwarded_total=311 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=98 dup_count=3
+[12:24:18][SENDER][FAST] seq=99 transmissions=7 retx_total=205 fast_total=53
+[12:24:18][VLINK][FORWARD] queued_ms=0.07 forwarded_total=312 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=98 dup_count=1
+[12:24:18][SENDER][RTO] seq=105 transmissions=3 retx_total=206 fast_total=53
+[12:24:18][VLINK][FORWARD] queued_ms=0.09 forwarded_total=313 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=98 dup_count=2
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=98 dup_count=3
+[12:24:18][SENDER][FAST] seq=99 transmissions=8 retx_total=207 fast_total=54
+[12:24:18][VLINK][FORWARD] queued_ms=0.10 forwarded_total=314 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][RTO] seq=100 transmissions=4 retx_total=208 fast_total=54
+[12:24:18][SENDER][RTO] seq=106 transmissions=3 retx_total=209 fast_total=54
+[12:24:18][VLINK][FORWARD] queued_ms=11.25 forwarded_total=315 depth=1 dest=127.0.0.1:9205
+[12:24:18][VLINK][FORWARD] queued_ms=22.69 forwarded_total=316 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=98 dup_count=1
+[12:24:18][SENDER][RTO] seq=101 transmissions=4 retx_total=210 fast_total=54
+[12:24:18][SENDER][RTO] seq=102 transmissions=4 retx_total=211 fast_total=54
+[12:24:18][VLINK][FORWARD] queued_ms=0.16 forwarded_total=317 depth=1 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] cumulative_ack=99 newly_acked=1 range=99-99 rtt_ms=56.88 srtt_ms=95.54 inflight=7
+[12:24:18][SENDER][SEND] seq=107 inflight=8 window=8
+[12:24:18][VLINK][FORWARD] queued_ms=12.40 forwarded_total=318 depth=1 dest=127.0.0.1:9205
+[12:24:18][VLINK][FORWARD] queued_ms=19.86 forwarded_total=319 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] cumulative_ack=100 newly_acked=1 range=100-100 rtt_ms=82.36 srtt_ms=93.89 inflight=7
+[12:24:18][SENDER][SEND] seq=108 inflight=8 window=8
+[12:24:18][VLINK][FORWARD] queued_ms=5.74 forwarded_total=320 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] cumulative_ack=101 newly_acked=1 range=101-101 rtt_ms=47.15 srtt_ms=88.05 inflight=7
+[12:24:18][SENDER][SEND] seq=109 inflight=8 window=8
+[12:24:18][VLINK][FORWARD] queued_ms=0.12 forwarded_total=321 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][RTO] seq=103 transmissions=4 retx_total=212 fast_total=54
+[12:24:18][SENDER][RTO] seq=104 transmissions=4 retx_total=213 fast_total=54
+[12:24:18][VLINK][FORWARD] queued_ms=8.73 forwarded_total=322 depth=1 dest=127.0.0.1:9205
+[12:24:18][VLINK][FORWARD] queued_ms=19.63 forwarded_total=323 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] cumulative_ack=102 newly_acked=1 range=102-102 rtt_ms=74.83 srtt_ms=86.40 inflight=7
+[12:24:18][SENDER][SEND] seq=110 inflight=8 window=8
+[12:24:18][VLINK][FORWARD] queued_ms=1.83 forwarded_total=324 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=102 dup_count=1
+[12:24:18][SENDER][RTO] seq=105 transmissions=4 retx_total=214 fast_total=54
+[12:24:18][VLINK][FORWARD] queued_ms=0.08 forwarded_total=325 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=102 dup_count=2
+[12:24:18][SENDER][RTO] seq=106 transmissions=4 retx_total=215 fast_total=54
+[12:24:18][VLINK][FORWARD] queued_ms=0.10 forwarded_total=326 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=102 dup_count=3
+[12:24:18][SENDER][FAST] seq=103 transmissions=5 retx_total=216 fast_total=55
+[12:24:18][VLINK][FORWARD] queued_ms=10.47 forwarded_total=327 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] cumulative_ack=103 newly_acked=1 range=103-103 rtt_ms=16.38 srtt_ms=77.64 inflight=7
+[12:24:18][SENDER][SEND] seq=111 inflight=8 window=8
+[12:24:18][VLINK][FORWARD] queued_ms=0.05 forwarded_total=328 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] cumulative_ack=104 newly_acked=1 range=104-104 rtt_ms=153.17 srtt_ms=87.09 inflight=7
+[12:24:18][SENDER][SEND] seq=112 inflight=8 window=8
+[12:24:18][VLINK][FORWARD] queued_ms=0.15 forwarded_total=329 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][RTO] seq=107 transmissions=2 retx_total=217 fast_total=55
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=104 dup_count=1
+[12:24:18][VLINK][FORWARD] queued_ms=11.13 forwarded_total=330 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] cumulative_ack=105 newly_acked=1 range=105-105 rtt_ms=140.87 srtt_ms=93.81 inflight=7
+[12:24:18][SENDER][SEND] seq=113 inflight=8 window=8
+[12:24:18][VLINK][FORWARD] queued_ms=0.13 forwarded_total=331 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=105 dup_count=1
+[12:24:18][SENDER][RTO] seq=108 transmissions=2 retx_total=218 fast_total=55
+[12:24:18][SENDER][RTO] seq=109 transmissions=2 retx_total=219 fast_total=55
+[12:24:18][VLINK][FORWARD] queued_ms=0.09 forwarded_total=332 depth=1 dest=127.0.0.1:9205
+[12:24:18][VLINK][FORWARD] queued_ms=11.74 forwarded_total=333 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=105 dup_count=2
+[12:24:18][SENDER][ACK] cumulative_ack=106 newly_acked=1 range=106-106 rtt_ms=150.78 srtt_ms=100.93 inflight=7
+[12:24:18][SENDER][SEND] seq=114 inflight=8 window=8
+[12:24:18][VLINK][FORWARD] queued_ms=0.11 forwarded_total=334 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=1
+[12:24:18][SENDER][RTO] seq=110 transmissions=2 retx_total=220 fast_total=55
+[12:24:18][VLINK][FORWARD] queued_ms=0.08 forwarded_total=335 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=2
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=3
+[12:24:18][SENDER][FAST] seq=107 transmissions=3 retx_total=221 fast_total=56
+[12:24:18][VLINK][FORWARD] queued_ms=0.09 forwarded_total=336 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=1
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=2
+[12:24:18][SENDER][RTO] seq=111 transmissions=2 retx_total=222 fast_total=56
+[12:24:18][SENDER][RTO] seq=112 transmissions=2 retx_total=223 fast_total=56
+[12:24:18][VLINK][FORWARD] queued_ms=0.11 forwarded_total=337 depth=1 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=3
+[12:24:18][SENDER][FAST] seq=107 transmissions=4 retx_total=224 fast_total=57
+[12:24:18][VLINK][FORWARD] queued_ms=12.43 forwarded_total=338 depth=1 dest=127.0.0.1:9205
+[12:24:18][VLINK][FORWARD] queued_ms=23.50 forwarded_total=339 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=1
+[12:24:18][SENDER][RTO] seq=108 transmissions=3 retx_total=225 fast_total=57
+[12:24:18][SENDER][RTO] seq=109 transmissions=3 retx_total=226 fast_total=57
+[12:24:18][SENDER][RTO] seq=113 transmissions=2 retx_total=227 fast_total=57
+[12:24:18][VLINK][FORWARD] queued_ms=0.12 forwarded_total=340 depth=2 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=2
+[12:24:18][VLINK][FORWARD] queued_ms=11.51 forwarded_total=341 depth=1 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=3
+[12:24:18][SENDER][FAST] seq=107 transmissions=5 retx_total=228 fast_total=58
+[12:24:18][VLINK][FORWARD] queued_ms=23.31 forwarded_total=342 depth=1 dest=127.0.0.1:9205
+[12:24:18][VLINK][FORWARD] queued_ms=19.17 forwarded_total=343 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=1
+[12:24:18][SENDER][RTO] seq=110 transmissions=3 retx_total=229 fast_total=58
+[12:24:18][SENDER][RTO] seq=114 transmissions=2 retx_total=230 fast_total=58
+[12:24:18][VLINK][FORWARD] queued_ms=0.10 forwarded_total=344 depth=1 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=2
+[12:24:18][VLINK][FORWARD] queued_ms=11.13 forwarded_total=345 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=3
+[12:24:18][SENDER][FAST] seq=107 transmissions=6 retx_total=231 fast_total=59
+[12:24:18][VLINK][FORWARD] queued_ms=0.10 forwarded_total=346 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=1
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=2
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=3
+[12:24:18][SENDER][FAST] seq=107 transmissions=7 retx_total=232 fast_total=60
+[12:24:18][VLINK][FORWARD] queued_ms=0.07 forwarded_total=347 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][RTO] seq=111 transmissions=3 retx_total=233 fast_total=60
+[12:24:18][SENDER][RTO] seq=112 transmissions=3 retx_total=234 fast_total=60
+[12:24:18][VLINK][FORWARD] queued_ms=0.10 forwarded_total=348 depth=1 dest=127.0.0.1:9205
+[12:24:18][VLINK][FORWARD] queued_ms=12.45 forwarded_total=349 depth=0 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=1
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=2
+[12:24:18][SENDER][RTO] seq=108 transmissions=4 retx_total=235 fast_total=60
+[12:24:18][SENDER][RTO] seq=109 transmissions=4 retx_total=236 fast_total=60
+[12:24:18][SENDER][RTO] seq=113 transmissions=3 retx_total=237 fast_total=60
+[12:24:18][VLINK][FORWARD] queued_ms=0.11 forwarded_total=350 depth=2 dest=127.0.0.1:9205
+[12:24:18][SENDER][ACK] duplicate cumulative_ack=106 dup_count=3
+[12:24:18][SENDER][FAST] seq=107 transmissions=8 retx_total=238 fast_total=61
+[12:24:18][VLINK][FORWARD] queued_ms=11.37 forwarded_total=351 depth=2 dest=127.0.0.1:9205
+[12:24:18][VLINK][FORWARD] queued_ms=23.81 forwarded_total=352 depth=1 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=106 dup_count=1
+[12:24:19][VLINK][FORWARD] queued_ms=30.04 forwarded_total=353 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][RTO] seq=110 transmissions=4 retx_total=239 fast_total=61
+[12:24:19][SENDER][RTO] seq=114 transmissions=3 retx_total=240 fast_total=61
+[12:24:19][VLINK][FORWARD] queued_ms=0.11 forwarded_total=354 depth=1 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=106 dup_count=2
+[12:24:19][VLINK][FORWARD] queued_ms=12.41 forwarded_total=355 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=106 dup_count=3
+[12:24:19][SENDER][FAST] seq=107 transmissions=9 retx_total=241 fast_total=62
+[12:24:19][VLINK][FORWARD] queued_ms=0.10 forwarded_total=356 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] cumulative_ack=107 newly_acked=1 range=107-107 rtt_ms=34.69 srtt_ms=92.65 inflight=7
+[12:24:19][SENDER][SEND] seq=115 inflight=8 window=8
+[12:24:19][VLINK][FORWARD] queued_ms=0.08 forwarded_total=357 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] cumulative_ack=108 newly_acked=1 range=108-108 rtt_ms=152.69 srtt_ms=100.15 inflight=7
+[12:24:19][SENDER][SEND] seq=116 inflight=8 window=8
+[12:24:19][VLINK][FORWARD] queued_ms=0.09 forwarded_total=358 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][RTO] seq=111 transmissions=4 retx_total=242 fast_total=62
+[12:24:19][SENDER][RTO] seq=112 transmissions=4 retx_total=243 fast_total=62
+[12:24:19][VLINK][FORWARD] queued_ms=4.04 forwarded_total=359 depth=1 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] cumulative_ack=109 newly_acked=1 range=109-109 rtt_ms=176.64 srtt_ms=109.72 inflight=7
+[12:24:19][SENDER][SEND] seq=117 inflight=8 window=8
+[12:24:19][VLINK][FORWARD] queued_ms=16.40 forwarded_total=360 depth=1 dest=127.0.0.1:9205
+[12:24:19][VLINK][FORWARD] queued_ms=15.16 forwarded_total=361 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=109 dup_count=1
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=109 dup_count=2
+[12:24:19][SENDER][RTO] seq=113 transmissions=4 retx_total=244 fast_total=62
+[12:24:19][VLINK][FORWARD] queued_ms=0.08 forwarded_total=362 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] cumulative_ack=110 newly_acked=1 range=110-110 rtt_ms=178.84 srtt_ms=118.36 inflight=7
+[12:24:19][SENDER][SEND] seq=118 inflight=8 window=8
+[12:24:19][VLINK][FORWARD] queued_ms=0.10 forwarded_total=363 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=110 dup_count=1
+[12:24:19][SENDER][RTO] seq=114 transmissions=4 retx_total=245 fast_total=62
+[12:24:19][VLINK][FORWARD] queued_ms=0.11 forwarded_total=364 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=110 dup_count=2
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=110 dup_count=3
+[12:24:19][SENDER][FAST] seq=111 transmissions=5 retx_total=246 fast_total=63
+[12:24:19][VLINK][FORWARD] queued_ms=0.07 forwarded_total=365 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] cumulative_ack=111 newly_acked=1 range=111-111 rtt_ms=22.57 srtt_ms=106.38 inflight=7
+[12:24:19][SENDER][SEND] seq=119 inflight=8 window=8
+[12:24:19][VLINK][FORWARD] queued_ms=0.10 forwarded_total=366 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][RTO] seq=115 transmissions=2 retx_total=247 fast_total=63
+[12:24:19][VLINK][FORWARD] queued_ms=5.16 forwarded_total=367 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] cumulative_ack=112 newly_acked=1 range=112-112 rtt_ms=169.13 srtt_ms=114.23 inflight=7
+[12:24:19][SENDER][ACK] cumulative_ack=113 newly_acked=1 range=113-113 rtt_ms=147.00 srtt_ms=118.32 inflight=6
+[12:24:19][SENDER][RTO] seq=116 transmissions=2 retx_total=248 fast_total=63
+[12:24:19][SENDER][RTO] seq=117 transmissions=2 retx_total=249 fast_total=63
+[12:24:19][VLINK][FORWARD] queued_ms=0.10 forwarded_total=368 depth=1 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=113 dup_count=1
+[12:24:19][VLINK][FORWARD] queued_ms=12.07 forwarded_total=369 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=113 dup_count=2
+[12:24:19][SENDER][ACK] cumulative_ack=114 newly_acked=1 range=114-114 rtt_ms=162.88 srtt_ms=123.89 inflight=5
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=1
+[12:24:19][SENDER][RTO] seq=118 transmissions=2 retx_total=250 fast_total=63
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=2
+[12:24:19][VLINK][FORWARD] queued_ms=0.52 forwarded_total=370 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=3
+[12:24:19][SENDER][FAST] seq=115 transmissions=3 retx_total=251 fast_total=64
+[12:24:19][VLINK][FORWARD] queued_ms=0.07 forwarded_total=371 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=1
+[12:24:19][SENDER][RTO] seq=119 transmissions=2 retx_total=252 fast_total=64
+[12:24:19][VLINK][FORWARD] queued_ms=0.14 forwarded_total=372 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=2
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=3
+[12:24:19][SENDER][FAST] seq=115 transmissions=4 retx_total=253 fast_total=65
+[12:24:19][VLINK][FORWARD] queued_ms=0.47 forwarded_total=373 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=1
+[12:24:19][SENDER][RTO] seq=116 transmissions=3 retx_total=254 fast_total=65
+[12:24:19][SENDER][RTO] seq=117 transmissions=3 retx_total=255 fast_total=65
+[12:24:19][VLINK][FORWARD] queued_ms=0.09 forwarded_total=374 depth=1 dest=127.0.0.1:9205
+[12:24:19][VLINK][FORWARD] queued_ms=11.25 forwarded_total=375 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=2
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=3
+[12:24:19][SENDER][FAST] seq=115 transmissions=5 retx_total=256 fast_total=66
+[12:24:19][VLINK][FORWARD] queued_ms=0.13 forwarded_total=376 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=1
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=2
+[12:24:19][SENDER][RTO] seq=118 transmissions=3 retx_total=257 fast_total=66
+[12:24:19][VLINK][FORWARD] queued_ms=0.09 forwarded_total=377 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=3
+[12:24:19][SENDER][FAST] seq=115 transmissions=6 retx_total=258 fast_total=67
+[12:24:19][VLINK][FORWARD] queued_ms=2.12 forwarded_total=378 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=1
+[12:24:19][SENDER][RTO] seq=119 transmissions=3 retx_total=259 fast_total=67
+[12:24:19][VLINK][FORWARD] queued_ms=0.11 forwarded_total=379 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=2
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=3
+[12:24:19][SENDER][FAST] seq=115 transmissions=7 retx_total=260 fast_total=68
+[12:24:19][VLINK][FORWARD] queued_ms=0.10 forwarded_total=380 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=1
+[12:24:19][SENDER][RTO] seq=116 transmissions=4 retx_total=261 fast_total=68
+[12:24:19][SENDER][RTO] seq=117 transmissions=4 retx_total=262 fast_total=68
+[12:24:19][VLINK][FORWARD] queued_ms=0.19 forwarded_total=381 depth=1 dest=127.0.0.1:9205
+[12:24:19][VLINK][FORWARD] queued_ms=11.74 forwarded_total=382 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=2
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=3
+[12:24:19][SENDER][FAST] seq=115 transmissions=8 retx_total=263 fast_total=69
+[12:24:19][VLINK][FORWARD] queued_ms=0.07 forwarded_total=383 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=1
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=114 dup_count=2
+[12:24:19][SENDER][ACK] cumulative_ack=115 newly_acked=1 range=115-115 rtt_ms=51.42 srtt_ms=114.83 inflight=4
+[12:24:19][SENDER][ACK] cumulative_ack=116 newly_acked=1 range=116-116 rtt_ms=101.33 srtt_ms=113.15 inflight=3
+[12:24:19][SENDER][RTO] seq=118 transmissions=4 retx_total=264 fast_total=69
+[12:24:19][VLINK][FORWARD] queued_ms=0.08 forwarded_total=384 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=116 dup_count=1
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=116 dup_count=2
+[12:24:19][SENDER][RTO] seq=119 transmissions=4 retx_total=265 fast_total=69
+[12:24:19][VLINK][FORWARD] queued_ms=0.15 forwarded_total=385 depth=0 dest=127.0.0.1:9205
+[12:24:19][SENDER][ACK] cumulative_ack=117 newly_acked=1 range=117-117 rtt_ms=175.27 srtt_ms=120.91 inflight=2
+[12:24:19][SENDER][ACK] duplicate cumulative_ack=117 dup_count=1
+[12:24:20][SENDER][ACK] cumulative_ack=118 newly_acked=1 range=118-118 rtt_ms=120.69 srtt_ms=120.88 inflight=1
+[12:24:20][SENDER][ACK] duplicate cumulative_ack=118 dup_count=1
+[12:24:20][SENDER][ACK] cumulative_ack=119 newly_acked=1 range=119-119 rtt_ms=112.00 srtt_ms=119.77 inflight=0
+[12:24:20][SENDER][ACK] duplicate cumulative_ack=119 dup_count=1
+[12:24:20][SENDER][DONE] acked=120/120 retransmissions=265 fast_retransmissions=69 srtt_ms=119.77 duration=7.914s throughput=0.124Mbps
+[12:24:20][SENDER][VLINK] enqueued=385 forwarded=385 dropped=0 max_depth=8/20 service_delay_ms=10.0
+[12:24:20][SENDER][CC] cc=fixed window=8
