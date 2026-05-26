@@ -527,6 +527,7 @@ class ReliableSender:
             return
         exists = self.history_file.exists()
         rtt_by_time = {round(elapsed, 2): rtt for elapsed, rtt in self.rtt_history}
+        self.history_file.parent.mkdir(parents=True, exist_ok=True)
         with self.history_file.open("a", newline="", encoding="utf-8") as file:
             writer = csv.DictWriter(
                 file,
