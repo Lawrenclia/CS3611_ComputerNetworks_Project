@@ -1,24 +1,24 @@
-# 基于 UDP 的应用层可靠传输与 Q-Learning 智能拥塞控制
+# 基于 UDP 的应用层可靠传输与 AI 拥塞控制
 
-本项目保留题目五中的可靠传输底层实现，并扩展了 Q-Learning 智能拥塞控制器：
+本项目对应大作业题目五，实现基于 UDP 的应用层可靠传输、虚拟瓶颈链路、AIMD 拥塞控制基线与 Q-Learning 智能拥塞控制。
 
 - Header 封装：在 UDP Payload 中自定义 `Sequence Number + Timestamp + Payload`。
 - 定时重传：发送端维护未确认队列，超过 RTO 后自动重传。
 - RTT/SRTT 采样：Sender 收到 ACK 后用当前时间减去包头 Timestamp 得到 RTT，并平滑计算 SRTT。
 - 多线程控制：发送线程、ACK 接收线程、定时器线程协同工作。
+- 拥塞控制：支持固定窗口、AIMD 与 Q-Learning 三种模式，动态调整 CWND。
+- 数据记录与可视化：输出 CSV 指标；安装 `matplotlib` 后可生成 CWND/RTT 图。
 - 快速重传与乱序处理：连续 3 个重复 ACK 立即重传缺失分组，接收端缓存乱序到达的数据包。
-- Q-Learning 拥塞控制：发送端按 1 个 RTT 为周期统计 RTT 趋势和丢包事件，用 6 状态 Q-Table 选择 CWND 保持、加 1 或减半。
 
 ## 目录说明
 
 - `protocol.py`：定义数据包和 ACK 的二进制封装/解析。
 - `virtual_link.py`：模拟固定带宽和有限缓存的虚拟瓶颈链路。
-- `congestion_control.py`：实现固定窗口控制器和 Q-Learning 智能拥塞控制器。
-- `sender.py`：可靠发送端，负责滑动窗口发送、ACK 处理和 RTO 重传。
+- `sender.py`：可靠发送端，负责滑动窗口发送、ACK 处理、RTO 重传、AIMD/Q-Learning CWND 控制和指标输出。
 - `receiver.py`：接收端，负责解析数据包、维护累计 ACK 并返回确认。
-- `train_q_learning.py`：多轮循环训练脚本，复用 Q-Table 并逐轮调整 epsilon。
-- `题目五实验报告.md`：实验报告说明。
-- `答辩讲稿提纲.md`：答辩讲稿提纲。
+- `plot_metrics.py`：读取 `metrics.csv` 和 `history.csv`，生成 AIMD/Q-Learning 对比图。
+- `题目五实验报告.md`：仅保留可靠传输底层架构说明。
+- `答辩讲稿提纲.md`：仅保留可靠传输部分的答辩讲稿。
 
 ## 协议格式
 
@@ -58,7 +58,38 @@ python3 sender.py \
   --target-port 9001 \
   --packets 40 \
   --window-size 8 \
+  --cc-mode aimd \
   --rto 0.2
+```
+
+三种拥塞控制模式：
+
+```bash
+# 固定窗口，便于验证可靠传输底层
+python3 sender.py --cc-mode fixed --window-size 8
+
+# AIMD 基线：ACK 加性增，RTO/快速重传乘性减
+python3 sender.py --cc-mode aimd --window-size 1 --max-cwnd 80
+
+# Q-Learning：按 RTT 趋势和丢包事件离散成 6 个状态，动作是保持、CWND+1、CWND/2
+python3 sender.py --cc-mode qlearning --window-size 1 --max-cwnd 80 --qtable-file q_table.json
+```
+
+记录和绘图：
+
+```bash
+python3 sender.py \
+  --cc-mode qlearning \
+  --packets 200 \
+  --metrics-file metrics.csv \
+  --history-file history.csv \
+  --plot-file qlearning_plot.png
+```
+
+分别运行 AIMD 与 Q-Learning 后，可生成对比图：
+
+```bash
+python3 plot_metrics.py --metrics-file metrics.csv --history-file history.csv --output comparison.png
 ```
 
 ## 虚拟瓶颈链路
@@ -86,66 +117,19 @@ python3 sender.py \
 python3 sender.py --disable-virtual-link
 ```
 
-启用 Q-Learning 智能拥塞控制：
-
-```bash
-python3 sender.py \
-  --target-host 127.0.0.1 \
-  --target-port 9001 \
-  --packets 120 \
-  --window-size 8 \
-  --link-queue-capacity 20 \
-  --link-service-delay-ms 10 \
-  --cc q-learning \
-  --min-window 1 \
-  --max-window 32 \
-  --q-alpha 0.3 \
-  --q-gamma 0.85 \
-  --q-epsilon 0.1 \
-  --q-table q_table.json
-```
-
-为了观察拥塞控制效果，可以让接收端模拟丢包和排队延迟：
-
-```bash
-python3 receiver.py \
-  --host 127.0.0.1 \
-  --port 9001 \
-  --loss-rate 0.08 \
-  --delay-ms 20 \
-  --jitter-ms 10 \
-  --seed 1
-```
-
-发送端日志中的 `[SENDER][CC]` 行会输出当前状态、选择动作、窗口变化、奖励值和 Q 值。
-
-多轮循环训练：
-
-```bash
-python3 train_q_learning.py \
-  --rounds 5 \
-  --packets 120 \
-  --q-table q_table.json \
-  --q-epsilon 0.3 \
-  --epsilon-decay 0.85 \
-  --min-epsilon 0.05
-```
-
 ## 实现要点
 
 1. `protocol.py` 使用 `struct.pack` / `struct.unpack` 完成 Header 与 ACK 的二进制封装。
 2. `sender.py` 使用 `unacked` 字典保存所有未确认分组的 Payload、最近发送时间和发送次数。
-3. 主线程按照当前 `window_size` 发送新分组，固定窗口模式下不变，Q-Learning 模式下由控制器每个 RTT 周期更新。
+3. 主线程按照当前 `CWND` 控制新分组发送，避免无限制注入 UDP 数据。
 4. ACK 线程持续 `recvfrom()`，收到累计 ACK 后删除所有 `seq <= ack_number` 的未确认分组。
 5. ACK 线程根据被确认分组保存的 `wire_timestamp` 计算 RTT，并使用 `SRTT = 0.875 * SRTT + 0.125 * RTT` 平滑。
 6. Timer 线程周期扫描 `unacked`，若 `now - last_send >= rto`，则重新封包并发送。
 7. ACK 线程统计重复累计 ACK，连续 3 次相同 ACK 时立即快速重传 `ack_number + 1`。
 8. `receiver.py` 维护 `expected_seq`，按序推进累计确认号，乱序分组暂存在缓存集合中。
-9. Q-Learning 状态严格为 6 个：RTT 趋势 `rtt_up/rtt_down/rtt_stable` × 丢包事件 `loss/no_loss`。
-10. Q-Learning 动作为 `0(hold)`、`1(cwnd+1)`、`2(cwnd/2)`，每个 RTT 周期结束时决策下一周期窗口。
-11. 奖励函数为 `R = reward_alpha * 本轮成功吞吐量 - reward_beta * 平均RTT(ms) - reward_gamma * 丢包数量`。
-12. 使用 epsilon-greedy 探索，并用 Bellman 公式实时更新 Q-Table；`--q-table` 可跨多轮保存和加载学习结果。
+9. AIMD 模式在收到 ACK 时执行 `CWND += 1 / CWND`，发生 RTO 或快速重传时执行 `CWND = max(1, CWND / 2)`。
+10. Q-Learning 模式用 `RTT 趋势 × 是否丢包` 形成 6 个状态，每个控制周期用吞吐、RTT 和丢包数计算奖励并更新 Q-Table。
 
 ## 环境要求
 
-只依赖 Python 标准库，无需安装第三方包。
+核心传输功能只依赖 Python 标准库。若需要生成 PNG 图表，需要安装 `matplotlib`。
