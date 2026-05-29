@@ -8,10 +8,10 @@
 
 系统由两个进程组成：
 
-- `sender.py`：发送端，负责构造数据包、维护未确认队列、接收 ACK 和触发超时重传。
+- `sender.py`：发送端，负责构造数据包、维护未确认队列、接收 ACK、触发重传和执行拥塞控制。
 - `receiver.py`：接收端，负责解析数据包、维护接收序号并返回累计 ACK。
 - `protocol.py`：协议层封装模块，负责数据包和 ACK 的二进制格式转换。
-- `congestion_control.py`：拥塞控制模块，负责固定窗口控制和 Q-Learning 动态窗口控制。
+- `virtual_link.py`：虚拟链路模块，负责模拟固定服务速率和有限队列容量。
 
 ## 3. 协议设计
 
@@ -69,7 +69,7 @@ Q-Learning 控制器按 1 个 RTT 为周期统计网络特征。状态空间为 
 奖励函数：
 
 ```text
-R = reward_alpha * throughput - reward_beta * avg_rtt_ms - reward_gamma * loss_count
+R = acked_packets - 20 * avg_rtt_seconds - 2 * loss_count
 ```
 
 控制器使用 epsilon-greedy 探索，并在每个 RTT 周期结束时使用 Bellman 公式更新 Q-Table：
@@ -97,7 +97,7 @@ python3 sender.py --target-host 127.0.0.1 --target-port 9001 --packets 40 --wind
 启用 Q-Learning：
 
 ```bash
-python3 sender.py --target-host 127.0.0.1 --target-port 9001 --packets 120 --window-size 8 --cc q-learning --min-window 1 --max-window 32 --q-table q_table.json
+python3 sender.py --target-host 127.0.0.1 --target-port 9001 --packets 120 --window-size 8 --cc-mode qlearning --max-cwnd 32 --qtable-file q_table.json
 ```
 
 多轮训练：

@@ -12,7 +12,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--receiver-port", type=int, default=9201)
     parser.add_argument("--sender-port", type=int, default=9200)
     parser.add_argument("--window-size", type=int, default=8)
-    parser.add_argument("--min-window", type=int, default=1)
     parser.add_argument("--max-window", type=int, default=32)
     parser.add_argument("--rto", type=float, default=0.20)
     parser.add_argument("--q-table", default="q_table.json")
@@ -21,12 +20,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--q-epsilon", type=float, default=0.30)
     parser.add_argument("--epsilon-decay", type=float, default=0.85)
     parser.add_argument("--min-epsilon", type=float, default=0.05)
-    parser.add_argument("--reward-alpha", type=float, default=1.0)
-    parser.add_argument("--reward-beta", type=float, default=0.02)
-    parser.add_argument("--reward-gamma", type=float, default=3.0)
     parser.add_argument("--loss-rate", type=float, default=0.08)
     parser.add_argument("--delay-ms", type=float, default=20.0)
     parser.add_argument("--jitter-ms", type=float, default=10.0)
+    parser.add_argument("--metrics-file", default="metrics.csv")
+    parser.add_argument("--history-file", default="history.csv")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--quiet-sender", action="store_true")
     return parser
@@ -43,6 +41,8 @@ def main() -> None:
 
     root = Path(__file__).resolve().parent
     q_table = str((root / args.q_table).resolve())
+    metrics_file = str((root / args.metrics_file).resolve())
+    history_file = str((root / args.history_file).resolve())
     receiver_cmd = [
         sys.executable,
         str(root / "receiver.py"),
@@ -92,28 +92,22 @@ def main() -> None:
                 str(args.window_size),
                 "--rto",
                 str(args.rto),
-                "--cc",
-                "q-learning",
-                "--min-window",
-                str(args.min_window),
-                "--max-window",
+                "--cc-mode",
+                "qlearning",
+                "--max-cwnd",
                 str(args.max_window),
                 "--q-alpha",
                 str(args.q_alpha),
                 "--q-gamma",
                 str(args.q_gamma),
-                "--q-epsilon",
+                "--epsilon",
                 str(epsilon),
-                "--q-table",
+                "--qtable-file",
                 q_table,
-                "--q-seed",
-                str(args.seed + round_index),
-                "--reward-alpha",
-                str(args.reward_alpha),
-                "--reward-beta",
-                str(args.reward_beta),
-                "--reward-gamma",
-                str(args.reward_gamma),
+                "--metrics-file",
+                metrics_file,
+                "--history-file",
+                history_file,
             ]
             if args.quiet_sender:
                 sender_cmd.append("--quiet")

@@ -13,6 +13,17 @@ from pathlib import Path
 from protocol import PAYLOAD_SIZE, build_payload, pack_data_packet, unpack_ack
 from virtual_link import VirtualFunnelLink
 
+Q_STATE_NAMES = (
+    "rtt_up|no_loss",
+    "rtt_up|loss",
+    "rtt_down|no_loss",
+    "rtt_down|loss",
+    "rtt_stable|no_loss",
+    "rtt_stable|loss",
+)
+Q_ACTION_KEYS = ("0", "1", "2")
+Q_ACTION_NAMES = ("hold", "cwnd+1", "cwnd/2")
+
 
 @dataclass
 class PacketState:
@@ -98,11 +109,21 @@ class CongestionController:
             return
         try:
             self.qtable_file.parent.mkdir(parents=True, exist_ok=True)
-            data = {"q_table": self.q_table, "epsilon": self.epsilon}
-            self.qtable_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            data = {
+                state_name: {
+                    action_key: self.q_table[state_index][action_index]
+                    for action_index, action_key in enumerate(Q_ACTION_KEYS)
+                }
+                for state_index, state_name in enumerate(Q_STATE_NAMES)
+            }
+            self.qtable_file.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
         except OSError as exc:
             if self.verbose:
                 print(f"[SENDER][QLEARN] failed to save q-table to {self.qtable_file}: {exc}", flush=True)
+
     def _choose_action(self, state: int) -> int:
         if random.random() < self.epsilon:
             return random.randrange(3)
@@ -149,12 +170,38 @@ class CongestionController:
             return
         try:
             data = json.loads(self.qtable_file.read_text(encoding="utf-8"))
-            rows = data.get("q_table", [])
-            if len(rows) == 6 and all(len(row) == 3 for row in rows):
-                self.q_table = [[float(value) for value in row] for row in rows]
+            rows = self._q_table_rows_from_json(data)
+            if rows is not None:
+                self.q_table = rows
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             if self.verbose:
                 print("[SENDER][QLEARN] ignore invalid q-table file", flush=True)
+
+    def _q_table_rows_from_json(self, data: object) -> list[list[float]] | None:
+        if not isinstance(data, dict):
+            return None
+
+        rows = data.get("q_table")
+        if isinstance(rows, list) and len(rows) == len(Q_STATE_NAMES):
+            parsed_rows = []
+            for row in rows:
+                if not isinstance(row, list) or len(row) != len(Q_ACTION_KEYS):
+                    return None
+                parsed_rows.append([float(value) for value in row])
+            return parsed_rows
+
+        parsed_rows = []
+        for state_name in Q_STATE_NAMES:
+            state_values = data.get(state_name)
+            if not isinstance(state_values, dict):
+                return None
+            parsed_rows.append(
+                [
+                    float(state_values.get(action_key, 0.0))
+                    for action_key in Q_ACTION_KEYS
+                ]
+            )
+        return parsed_rows
 
 
 class ReliableSender:
@@ -172,6 +219,8 @@ class ReliableSender:
         use_virtual_link: bool = True,
         link_queue_capacity: int = 20,
         link_service_delay_ms: float = 10.0,
+        link_bandwidth_drop_after_packets: int | None = None,
+        link_bandwidth_drop_factor: float = 0.5,
         cc_mode: str = "fixed",
         max_cwnd: float = 100.0,
         epsilon: float = 0.10,
@@ -208,9 +257,12 @@ class ReliableSender:
         self.use_virtual_link = use_virtual_link
         self.link_queue_capacity = link_queue_capacity
         self.link_service_delay_ms = link_service_delay_ms
+        self.link_bandwidth_drop_after_packets = link_bandwidth_drop_after_packets
+        self.link_bandwidth_drop_factor = link_bandwidth_drop_factor
+        initial_cwnd = 1.0 if cc_mode == "aimd" else self.window_size
         self.controller = CongestionController(
             mode=cc_mode,
-            initial_cwnd=self.window_size,
+            initial_cwnd=initial_cwnd,
             max_cwnd=max_cwnd,
             epsilon=epsilon,
             alpha=q_alpha,
@@ -238,6 +290,8 @@ class ReliableSender:
                 service_delay_ms=self.link_service_delay_ms,
                 queue_capacity=self.link_queue_capacity,
                 verbose=self.verbose,
+                bandwidth_drop_after_packets=self.link_bandwidth_drop_after_packets,
+                bandwidth_drop_factor=self.link_bandwidth_drop_factor,
             )
 
         ack_thread = threading.Thread(target=self._ack_worker, args=(sock,), daemon=True)
@@ -458,9 +512,10 @@ class ReliableSender:
         state, action, reward = result
         self._log(
             "QLEARN",
-            "state={state} action={action} reward={reward:.3f} cwnd={cwnd:.2f}".format(
-                state=state,
+            "state={state} action={action}({action_name}) reward={reward:.3f} cwnd={cwnd:.2f}".format(
+                state=Q_STATE_NAMES[state],
                 action=action,
+                action_name=Q_ACTION_NAMES[action],
                 reward=reward,
                 cwnd=self.controller.cwnd,
             ),
@@ -608,28 +663,41 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--window-size", type=int, default=8)
     parser.add_argument(
         "--cc-mode",
-        choices=("fixed", "aimd", "qlearning"),
+        "--cc",
+        dest="cc_mode",
+        choices=("fixed", "aimd", "qlearning", "q-learning"),
         default="fixed",
         help="congestion control mode: fixed window, AIMD baseline, or Q-Learning",
     )
-    parser.add_argument("--max-cwnd", type=float, default=100.0)
-    parser.add_argument("--epsilon", type=float, default=0.10)
+    parser.add_argument("--max-cwnd", "--max-window", dest="max_cwnd", type=float, default=100.0)
+    parser.add_argument("--epsilon", "--q-epsilon", dest="epsilon", type=float, default=0.10)
     parser.add_argument("--q-alpha", type=float, default=0.30)
     parser.add_argument("--q-gamma", type=float, default=0.85)
-    parser.add_argument("--qtable-file", default="q_table.json")
+    parser.add_argument("--qtable-file", "--q-table", dest="qtable_file", default="q_table.json")
     parser.add_argument("--metrics-file", default="metrics.csv")
     parser.add_argument("--history-file", default="history.csv")
     parser.add_argument("--plot-file", default=None)
     parser.add_argument("--rto", type=float, default=0.20)
     parser.add_argument("--link-queue-capacity", type=int, default=20)
     parser.add_argument("--link-service-delay-ms", type=float, default=10.0)
+    parser.add_argument("--link-bandwidth-drop-after-packets", type=int, default=0)
+    parser.add_argument("--link-bandwidth-drop-factor", type=float, default=0.5)
     parser.add_argument("--disable-virtual-link", action="store_true")
+    parser.add_argument("--min-window", type=float, default=1.0, help=argparse.SUPPRESS)
+    parser.add_argument("--q-seed", type=int, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--reward-alpha", type=float, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--reward-beta", type=float, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--reward-gamma", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--quiet", action="store_true")
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
+    if args.cc_mode == "q-learning":
+        args.cc_mode = "qlearning"
+    if args.q_seed is not None:
+        random.seed(args.q_seed)
     if args.packets < 0:
         raise SystemExit("--packets must be non-negative")
     if args.start_seq < 0:
@@ -650,6 +718,10 @@ def main() -> None:
         raise SystemExit("--link-queue-capacity must be positive")
     if args.link_service_delay_ms < 0:
         raise SystemExit("--link-service-delay-ms must be non-negative")
+    if args.link_bandwidth_drop_after_packets < 0:
+        raise SystemExit("--link-bandwidth-drop-after-packets must be non-negative")
+    if not 0 < args.link_bandwidth_drop_factor <= 1:
+        raise SystemExit("--link-bandwidth-drop-factor must be in (0, 1]")
 
     sender = ReliableSender(
         target_host=args.target_host,
@@ -664,6 +736,10 @@ def main() -> None:
         use_virtual_link=not args.disable_virtual_link,
         link_queue_capacity=args.link_queue_capacity,
         link_service_delay_ms=args.link_service_delay_ms,
+        link_bandwidth_drop_after_packets=(
+            args.link_bandwidth_drop_after_packets or None
+        ),
+        link_bandwidth_drop_factor=args.link_bandwidth_drop_factor,
         cc_mode=args.cc_mode,
         max_cwnd=args.max_cwnd,
         epsilon=args.epsilon,

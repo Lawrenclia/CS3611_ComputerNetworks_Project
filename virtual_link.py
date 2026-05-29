@@ -22,11 +22,17 @@ class VirtualFunnelLink:
         queue_capacity: int = 20,
         verbose: bool = True,
         label: str = "VLINK",
+        bandwidth_drop_after_packets: int | None = None,
+        bandwidth_drop_factor: float = 0.5,
     ) -> None:
         if queue_capacity <= 0:
             raise ValueError("queue_capacity must be positive")
         if service_delay_ms < 0:
             raise ValueError("service_delay_ms must be non-negative")
+        if bandwidth_drop_after_packets is not None and bandwidth_drop_after_packets <= 0:
+            raise ValueError("bandwidth_drop_after_packets must be positive")
+        if not 0 < bandwidth_drop_factor <= 1:
+            raise ValueError("bandwidth_drop_factor must be in (0, 1]")
 
         self.sock = sock
         self.service_delay_ms = float(service_delay_ms)
@@ -34,6 +40,9 @@ class VirtualFunnelLink:
         self.queue_capacity = queue_capacity
         self.verbose = verbose
         self.label = label
+        self.bandwidth_drop_after_packets = bandwidth_drop_after_packets
+        self.bandwidth_drop_factor = float(bandwidth_drop_factor)
+        self._bandwidth_drop_applied = False
 
         self._queue: queue.Queue[tuple[bytes, tuple[str, int], float]] = queue.Queue(
             maxsize=queue_capacity
@@ -112,6 +121,7 @@ class VirtualFunnelLink:
                     self._stats.forwarded_packets += 1
                     forwarded_total = self._stats.forwarded_packets
 
+                self._maybe_apply_bandwidth_drop(forwarded_total)
                 self._log(
                     "FORWARD",
                     "queued_ms={queued_ms:.2f} forwarded_total={forwarded_total} "
@@ -129,6 +139,31 @@ class VirtualFunnelLink:
                 break
             finally:
                 self._queue.task_done()
+
+    def _maybe_apply_bandwidth_drop(self, forwarded_total: int) -> None:
+        if self.bandwidth_drop_after_packets is None or self._bandwidth_drop_applied:
+            return
+        if forwarded_total < self.bandwidth_drop_after_packets:
+            return
+
+        with self._lock:
+            if self._bandwidth_drop_applied:
+                return
+            old_delay_ms = self.service_delay_ms
+            self.service_delay_ms = self.service_delay_ms / self.bandwidth_drop_factor
+            self.service_delay = self.service_delay_ms / 1000.0
+            self._bandwidth_drop_applied = True
+
+        self._log(
+            "BANDWIDTH",
+            "drop_after_forwarded={forwarded} factor={factor:.3f} "
+            "service_delay_ms={old:.2f}->{new:.2f}".format(
+                forwarded=forwarded_total,
+                factor=self.bandwidth_drop_factor,
+                old=old_delay_ms,
+                new=self.service_delay_ms,
+            ),
+        )
 
     def _log(self, category: str, message: str) -> None:
         if not self.verbose:

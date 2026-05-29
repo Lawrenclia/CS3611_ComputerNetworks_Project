@@ -99,6 +99,7 @@ python3 plot_metrics.py --metrics-file metrics.csv --history-file history.csv --
 - 默认带宽约为 100 包/秒，即每 10ms 漏出一个包。
 - 默认队列容量为 20 个包，超过容量的分组会直接丢弃。
 - 发送端的 `sendto()` 会先进入虚拟队列，再由后台线程按固定速率真正发送到网卡。
+- 可选启用中途带宽突变，按已转发包数触发带宽下降，用于观察拥塞控制算法恢复过程。
 
 运行示例：
 
@@ -109,6 +110,16 @@ python3 sender.py \
   --window-size 30 \
   --link-queue-capacity 20 \
   --link-service-delay-ms 10
+```
+
+中途将带宽减半：
+
+```bash
+python3 sender.py \
+  --cc-mode qlearning \
+  --packets 200 \
+  --link-bandwidth-drop-after-packets 100 \
+  --link-bandwidth-drop-factor 0.5
 ```
 
 如果想临时关闭虚拟链路，可加上：
