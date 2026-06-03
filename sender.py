@@ -4,9 +4,12 @@ import argparse
 import csv
 import json
 import random
+import site
 import socket
+import sys
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,6 +26,7 @@ Q_STATE_NAMES = (
 )
 Q_ACTION_KEYS = ("0", "1", "2")
 Q_ACTION_NAMES = ("hold", "cwnd+1", "cwnd/2")
+DQN_ACTION_MULTIPLIERS = (0.50, 0.75, 1.00, 1.25, 1.50)
 
 
 @dataclass
@@ -43,6 +47,11 @@ class CongestionController:
         alpha: float,
         gamma: float,
         qtable_file: str | None,
+        dqn_model_file: str | None,
+        dqn_lr: float,
+        dqn_batch_size: int,
+        dqn_replay_capacity: int,
+        dqn_target_update: int,
         verbose: bool,
     ) -> None:
         self.mode = mode
@@ -52,6 +61,11 @@ class CongestionController:
         self.alpha = alpha
         self.gamma = gamma
         self.qtable_file = Path(qtable_file) if qtable_file else None
+        self.dqn_model_file = Path(dqn_model_file) if dqn_model_file else None
+        self.dqn_lr = dqn_lr
+        self.dqn_batch_size = dqn_batch_size
+        self.dqn_replay_capacity = dqn_replay_capacity
+        self.dqn_target_update = dqn_target_update
         self.verbose = verbose
 
         self.q_table = [[0.0, 0.0, 0.0] for _ in range(6)]
@@ -63,6 +77,18 @@ class CongestionController:
         self.interval_rtt_sum = 0.0
         self.interval_rtt_count = 0
         self._load_q_table()
+
+        self.torch = None
+        self.dqn_policy = None
+        self.dqn_target = None
+        self.dqn_optimizer = None
+        self.dqn_loss_fn = None
+        self.dqn_replay = deque(maxlen=max(1, dqn_replay_capacity))
+        self.dqn_last_state = None
+        self.dqn_last_action = None
+        self.dqn_steps = 0
+        if self.mode == "dqn":
+            self._init_dqn()
 
     def window_limit(self) -> int:
         return max(1, int(self.cwnd))
@@ -83,7 +109,9 @@ class CongestionController:
         if self.mode == "aimd":
             self.cwnd = max(1.0, self.cwnd / 2.0)
 
-    def maybe_step_qlearning(self, srtt: float | None) -> tuple[int, int, float] | None:
+    def maybe_step_qlearning(self, srtt: float | None) -> tuple[str, object, float, str] | None:
+        if self.mode == "dqn":
+            return self._step_dqn(srtt)
         if self.mode != "qlearning":
             self._reset_interval()
             return None
@@ -102,9 +130,12 @@ class CongestionController:
         self.last_action = action
         self._reset_interval()
         self.last_srtt = srtt
-        return state, action, reward
+        return "qlearning", (state, action), reward, f"cwnd={self.cwnd:.2f}"
 
     def save(self) -> None:
+        if self.mode == "dqn":
+            self._save_dqn()
+            return
         if self.mode != "qlearning" or self.qtable_file is None:
             return
         try:
@@ -158,6 +189,160 @@ class CongestionController:
             else 0.0
         )
         return self.interval_acked - 20.0 * avg_rtt - 2.0 * self.interval_losses
+
+    def _step_dqn(self, srtt: float | None) -> tuple[str, object, float, str]:
+        state = self._continuous_state(srtt)
+        reward = self._reward()
+        if self.dqn_last_state is not None and self.dqn_last_action is not None:
+            self.dqn_replay.append(
+                (self.dqn_last_state, self.dqn_last_action, reward, state)
+            )
+            self._train_dqn_batch()
+
+        action = self._choose_dqn_action(state)
+        old_cwnd = self.cwnd
+        multiplier = DQN_ACTION_MULTIPLIERS[action]
+        self.cwnd = min(self.max_cwnd, max(1.0, self.cwnd * multiplier))
+        self.dqn_last_state = state
+        self.dqn_last_action = action
+        self.dqn_steps += 1
+        if self.dqn_steps % self.dqn_target_update == 0:
+            self.dqn_target.load_state_dict(self.dqn_policy.state_dict())
+
+        loss_rate = self._interval_loss_rate()
+        detail = (
+            "state=[rtt_ms={rtt:.3f}, loss_pct={loss:.2f}, cwnd={old:.2f}] "
+            "action={action} multiplier={mult:.2f} cwnd={new:.2f} replay={replay}"
+        ).format(
+            rtt=state[0],
+            loss=loss_rate * 100.0,
+            old=old_cwnd,
+            action=action,
+            mult=multiplier,
+            new=self.cwnd,
+            replay=len(self.dqn_replay),
+        )
+        self._reset_interval()
+        self.last_srtt = srtt
+        return "dqn", (state, action, multiplier), reward, detail
+
+    def _continuous_state(self, srtt: float | None) -> tuple[float, float, float]:
+        avg_rtt = (
+            self.interval_rtt_sum / self.interval_rtt_count
+            if self.interval_rtt_count
+            else (srtt or self.last_srtt or 0.0)
+        )
+        return (
+            float(avg_rtt * 1000.0),
+            float(self._interval_loss_rate() * 100.0),
+            float(self.cwnd),
+        )
+
+    def _normalized_dqn_state(self, state: tuple[float, float, float]):
+        rtt_ms, loss_pct, cwnd = state
+        return self.torch.tensor(
+            [
+                min(rtt_ms / 1000.0, 10.0),
+                min(max(loss_pct / 100.0, 0.0), 1.0),
+                min(max(cwnd / self.max_cwnd, 0.0), 1.0),
+            ],
+            dtype=self.torch.float32,
+        )
+
+    def _interval_loss_rate(self) -> float:
+        total = self.interval_acked + self.interval_losses
+        if total <= 0:
+            return 0.0
+        return self.interval_losses / total
+
+    def _choose_dqn_action(self, state: tuple[float, float, float]) -> int:
+        if random.random() < self.epsilon:
+            return random.randrange(len(DQN_ACTION_MULTIPLIERS))
+        with self.torch.no_grad():
+            q_values = self.dqn_policy(self._normalized_dqn_state(state).unsqueeze(0))
+        return int(self.torch.argmax(q_values, dim=1).item())
+
+    def _train_dqn_batch(self) -> None:
+        if len(self.dqn_replay) < self.dqn_batch_size:
+            return
+        batch = random.sample(self.dqn_replay, self.dqn_batch_size)
+        states, actions, rewards, next_states = zip(*batch)
+        state_tensor = self.torch.stack([self._normalized_dqn_state(state) for state in states])
+        action_tensor = self.torch.tensor(actions, dtype=self.torch.int64).unsqueeze(1)
+        reward_tensor = self.torch.tensor(rewards, dtype=self.torch.float32)
+        next_tensor = self.torch.stack(
+            [self._normalized_dqn_state(state) for state in next_states]
+        )
+
+        q_values = self.dqn_policy(state_tensor).gather(1, action_tensor).squeeze(1)
+        with self.torch.no_grad():
+            next_best = self.dqn_target(next_tensor).max(1).values
+            target = reward_tensor + self.gamma * next_best
+        loss = self.dqn_loss_fn(q_values, target)
+        self.dqn_optimizer.zero_grad()
+        loss.backward()
+        self.dqn_optimizer.step()
+
+    def _init_dqn(self) -> None:
+        try:
+            import torch
+            import torch.nn as nn
+        except ImportError as exc:
+            user_site = site.getusersitepackages()
+            if user_site not in sys.path:
+                sys.path.append(user_site)
+            try:
+                import torch
+                import torch.nn as nn
+            except ImportError:
+                raise SystemExit(
+                    "DQN mode requires PyTorch. Install it first, for example: "
+                    "python -m pip install torch"
+                ) from exc
+
+        class DQNNet(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.net = nn.Sequential(
+                    nn.Linear(3, 32),
+                    nn.ReLU(),
+                    nn.Linear(32, 32),
+                    nn.ReLU(),
+                    nn.Linear(32, len(DQN_ACTION_MULTIPLIERS)),
+                )
+
+            def forward(self, x):
+                return self.net(x)
+
+        self.torch = torch
+        self.dqn_policy = DQNNet()
+        self.dqn_target = DQNNet()
+        self.dqn_optimizer = torch.optim.Adam(self.dqn_policy.parameters(), lr=self.dqn_lr)
+        self.dqn_loss_fn = nn.SmoothL1Loss()
+        if self.dqn_model_file and self.dqn_model_file.exists():
+            checkpoint = torch.load(self.dqn_model_file, map_location="cpu")
+            self.dqn_policy.load_state_dict(checkpoint["policy_state_dict"])
+            if "optimizer_state_dict" in checkpoint:
+                self.dqn_optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            self.dqn_steps = int(checkpoint.get("steps", 0))
+        self.dqn_target.load_state_dict(self.dqn_policy.state_dict())
+        self.dqn_target.eval()
+
+    def _save_dqn(self) -> None:
+        if self.dqn_model_file is None or self.dqn_policy is None:
+            return
+        self.dqn_model_file.parent.mkdir(parents=True, exist_ok=True)
+        self.torch.save(
+            {
+                "policy_state_dict": self.dqn_policy.state_dict(),
+                "optimizer_state_dict": self.dqn_optimizer.state_dict(),
+                "steps": self.dqn_steps,
+                "actions": DQN_ACTION_MULTIPLIERS,
+                "state_features": ["rtt_ms", "loss_percent", "cwnd"],
+                "max_cwnd": self.max_cwnd,
+            },
+            self.dqn_model_file,
+        )
 
     def _reset_interval(self) -> None:
         self.interval_acked = 0
@@ -227,6 +412,11 @@ class ReliableSender:
         q_alpha: float = 0.30,
         q_gamma: float = 0.85,
         qtable_file: str | None = "q_table.json",
+        dqn_model_file: str | None = "dqn_model.pt",
+        dqn_lr: float = 0.001,
+        dqn_batch_size: int = 16,
+        dqn_replay_capacity: int = 1024,
+        dqn_target_update: int = 10,
         metrics_file: str | None = None,
         history_file: str | None = None,
         plot_file: str | None = None,
@@ -268,6 +458,11 @@ class ReliableSender:
             alpha=q_alpha,
             gamma=q_gamma,
             qtable_file=qtable_file,
+            dqn_model_file=dqn_model_file,
+            dqn_lr=dqn_lr,
+            dqn_batch_size=dqn_batch_size,
+            dqn_replay_capacity=dqn_replay_capacity,
+            dqn_target_update=dqn_target_update,
             verbose=verbose,
         )
         self.metrics_file = Path(metrics_file) if metrics_file else None
@@ -509,17 +704,21 @@ class ReliableSender:
         self._record_cwnd(now)
         if result is None:
             return
-        state, action, reward = result
-        self._log(
-            "QLEARN",
-            "state={state} action={action}({action_name}) reward={reward:.3f} cwnd={cwnd:.2f}".format(
-                state=Q_STATE_NAMES[state],
-                action=action,
-                action_name=Q_ACTION_NAMES[action],
-                reward=reward,
-                cwnd=self.controller.cwnd,
-            ),
-        )
+        mode, payload, reward, detail = result
+        if mode == "qlearning":
+            state, action = payload
+            self._log(
+                "QLEARN",
+                "state={state} action={action}({action_name}) reward={reward:.3f} cwnd={cwnd:.2f}".format(
+                    state=Q_STATE_NAMES[state],
+                    action=action,
+                    action_name=Q_ACTION_NAMES[action],
+                    reward=reward,
+                    cwnd=self.controller.cwnd,
+                ),
+            )
+            return
+        self._log("DQN", f"{detail} reward={reward:.3f}")
 
     def _record_cwnd(self, now: float) -> None:
         if self.started_at is None:
@@ -665,15 +864,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--cc-mode",
         "--cc",
         dest="cc_mode",
-        choices=("fixed", "aimd", "qlearning", "q-learning"),
+        choices=("fixed", "aimd", "qlearning", "q-learning", "dqn"),
         default="fixed",
-        help="congestion control mode: fixed window, AIMD baseline, or Q-Learning",
+        help="congestion control mode: fixed window, AIMD baseline, Q-Learning, or DQN",
     )
     parser.add_argument("--max-cwnd", "--max-window", dest="max_cwnd", type=float, default=100.0)
     parser.add_argument("--epsilon", "--q-epsilon", dest="epsilon", type=float, default=0.10)
     parser.add_argument("--q-alpha", type=float, default=0.30)
     parser.add_argument("--q-gamma", type=float, default=0.85)
     parser.add_argument("--qtable-file", "--q-table", dest="qtable_file", default="q_table.json")
+    parser.add_argument("--dqn-model-file", default="dqn_model.pt")
+    parser.add_argument("--dqn-lr", type=float, default=0.001)
+    parser.add_argument("--dqn-batch-size", type=int, default=16)
+    parser.add_argument("--dqn-replay-capacity", type=int, default=1024)
+    parser.add_argument("--dqn-target-update", type=int, default=10)
     parser.add_argument("--metrics-file", default="metrics.csv")
     parser.add_argument("--history-file", default="history.csv")
     parser.add_argument("--plot-file", default=None)
@@ -714,6 +918,14 @@ def main() -> None:
         raise SystemExit("--q-alpha must be in (0, 1]")
     if not 0 <= args.q_gamma <= 1:
         raise SystemExit("--q-gamma must be between 0 and 1")
+    if args.dqn_lr <= 0:
+        raise SystemExit("--dqn-lr must be positive")
+    if args.dqn_batch_size <= 0:
+        raise SystemExit("--dqn-batch-size must be positive")
+    if args.dqn_replay_capacity <= 0:
+        raise SystemExit("--dqn-replay-capacity must be positive")
+    if args.dqn_target_update <= 0:
+        raise SystemExit("--dqn-target-update must be positive")
     if args.link_queue_capacity <= 0:
         raise SystemExit("--link-queue-capacity must be positive")
     if args.link_service_delay_ms < 0:
@@ -746,6 +958,11 @@ def main() -> None:
         q_alpha=args.q_alpha,
         q_gamma=args.q_gamma,
         qtable_file=args.qtable_file,
+        dqn_model_file=args.dqn_model_file,
+        dqn_lr=args.dqn_lr,
+        dqn_batch_size=args.dqn_batch_size,
+        dqn_replay_capacity=args.dqn_replay_capacity,
+        dqn_target_update=args.dqn_target_update,
         metrics_file=args.metrics_file,
         history_file=args.history_file,
         plot_file=args.plot_file,

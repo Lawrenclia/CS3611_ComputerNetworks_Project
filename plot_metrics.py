@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import site
+import sys
 from collections import OrderedDict
 from pathlib import Path
 
@@ -38,7 +40,13 @@ def plot(metrics: list[dict[str, str]], histories: dict[str, list[dict[str, str]
     try:
         import matplotlib.pyplot as plt
     except ImportError as exc:
-        raise SystemExit("matplotlib is required for comparison plotting") from exc
+        user_site = site.getusersitepackages()
+        if user_site not in sys.path:
+            sys.path.append(user_site)
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            raise SystemExit("matplotlib is required for comparison plotting") from exc
 
     modes = [row["mode"] for row in metrics]
     throughput = [float(row["throughput_mbps"]) for row in metrics]
