@@ -16,7 +16,8 @@
 - `virtual_link.py`：模拟固定带宽和有限缓存的虚拟瓶颈链路。
 - `sender.py`：可靠发送端，负责滑动窗口发送、ACK 处理、RTO 重传、AIMD/Q-Learning/DQN CWND 控制和指标输出。
 - `receiver.py`：接收端，负责解析数据包、维护累计 ACK 并返回确认。
-- `plot_metrics.py`：读取 `metrics.csv` 和 `history.csv`，生成 AIMD/Q-Learning 对比图。
+- `plot_metrics.py`：读取 `artifacts/metrics/metrics.csv` 和 `artifacts/metrics/history.csv`，生成 AIMD/Q-Learning 对比图。
+- `artifacts/`：统一保存训练指标、checkpoint、绘图结果和一键演示产物。
 - `题目五实验报告.md`：仅保留可靠传输底层架构说明。
 - `答辩讲稿提纲.md`：仅保留可靠传输部分的答辩讲稿。
 
@@ -37,6 +38,33 @@ ACK 格式：
 | ACK Number | 4 Bytes | 当前累计确认到的最大连续序号，`-1` 表示尚无连续分组 |
 
 ## 运行方式
+
+### 一键演示
+
+在 macOS 上可以直接双击：
+
+```bash
+Run_Demo.command
+```
+
+它会自动启动 Receiver，依次验证 AIMD、Q-Learning、可选 DQN 和带宽突变场景，并在 `artifacts/demo_results/时间戳/` 下生成：
+
+- `index.html`：可视化总览页，包含 ACK 成功率、吞吐量、RTT、重传次数和日志入口。
+- `comparison_main.png`：AIMD / Q-Learning / DQN 对比图。
+- `comparison_drop.png`：带宽减半场景图。
+- `logs/`：每个场景的 Sender / Receiver 日志。
+
+也可以在终端运行：
+
+```bash
+python3 demo_runner.py
+```
+
+一键演示默认每个场景发送 300 个分组；如需快速试跑，可改为：
+
+```bash
+python3 demo_runner.py --packets 50
+```
 
 先启动接收端：
 
@@ -78,21 +106,68 @@ python3 sender.py --cc-mode qlearning --window-size 1 --max-cwnd 80 --qtable-fil
 python3 sender.py --cc-mode dqn --window-size 8 --max-cwnd 80 --dqn-model-file dqn_model.pt
 ```
 
+Reward 可调参数：
+
+```bash
+python3 sender.py \
+  --cc-mode qlearning \
+  --reward-throughput-weight 1.0 \
+  --reward-timeout-weight 10.0 \
+  --reward-retx-weight 2.0 \
+  --reward-rtt-weight 0.015
+```
+
+当前默认 reward 为：
+
+```text
+reward = throughput_weight * acked_packets
+       - timeout_weight * timeout_events
+       - retx_weight * retransmissions
+       - rtt_weight * avg_rtt_ms
+```
+
+这组参数仍奖励吞吐，但会显式重罚 RTO timeout。默认下，fast retransmit 主要承担 `retx_weight` 惩罚，而 timeout 会同时承担 `timeout_weight + retx_weight`，更符合 timeout 比快速重传更伤性能的常识。若希望 AI 更激进，可把 `--reward-timeout-weight` 降到 6 或把 `--reward-rtt-weight` 降到 0.010；若希望更稳，可把 timeout 权重提高到 15。
+
+多轮训练默认只在终端输出每轮指标摘要，不显示 ACK、重传和学习细节日志：
+
+```bash
+python3 train_q_learning.py \
+  --rounds 50 \
+  --packets 300 \
+  --q-table q_table.json \
+  --checkpoint-dir artifacts/checkpoints/qlearning \
+  --summary-file artifacts/training/qlearning_summary.csv
+```
+
+输出格式示例：
+
+```text
+Q-Learning training:   2%|...| 1/50 [..]
+[TRAIN] round=1/50 epsilon=0.300 acked=300/300 duration=...s throughput=...Mbps avg_rtt=...ms srtt=...ms retx=... fast=... timeout=... ckpt=artifacts/checkpoints/qlearning/...
+```
+
+每轮结束后会保存一份 Q-Table checkpoint，并将 round、epsilon、checkpoint、吞吐、RTT、重传等指标追加到 summary CSV。进度条使用 `tqdm`；若未安装，脚本会提示 `python3 -m pip install tqdm` 并退回普通逐轮输出。默认 50 轮足够观察趋势；如果时间允许，建议改成 `--rounds 100`。可用 `--checkpoint-every 2` 改为每 2 轮保存一次。
+
+如需调试每个 ACK、FAST 重传或 Q-Learning 动作，可额外加 `--verbose-sender`。
+
 记录和绘图：
 
 ```bash
 python3 sender.py \
   --cc-mode qlearning \
   --packets 200 \
-  --metrics-file metrics.csv \
-  --history-file history.csv \
-  --plot-file qlearning_plot.png
+  --metrics-file artifacts/metrics/metrics.csv \
+  --history-file artifacts/metrics/history.csv \
+  --plot-file artifacts/plots/qlearning_plot.png
 ```
 
 分别运行 AIMD 与 Q-Learning 后，可生成对比图：
 
 ```bash
-python3 plot_metrics.py --metrics-file metrics.csv --history-file history.csv --output comparison.png
+python3 plot_metrics.py \
+  --metrics-file artifacts/metrics/metrics.csv \
+  --history-file artifacts/metrics/history.csv \
+  --output artifacts/plots/comparison.png
 ```
 
 ## 虚拟瓶颈链路
@@ -142,7 +217,7 @@ python3 sender.py --disable-virtual-link
 7. ACK 线程统计重复累计 ACK，连续 3 次相同 ACK 时立即快速重传 `ack_number + 1`。
 8. `receiver.py` 维护 `expected_seq`，按序推进累计确认号，乱序分组暂存在缓存集合中。
 9. AIMD 模式在收到 ACK 时执行 `CWND += 1 / CWND`，发生 RTO 或快速重传时执行 `CWND = max(1, CWND / 2)`。
-10. Q-Learning 模式用 `RTT 趋势 × 是否丢包` 形成 6 个状态，每个控制周期用吞吐、RTT 和丢包数计算奖励并更新 Q-Table。
+10. Q-Learning 模式用 `RTT 趋势 × 是否重传` 形成 6 个状态，每个控制周期用吞吐、timeout、重传和 RTT 计算奖励并更新 Q-Table。
 11. DQN 模式废弃离散 Q-Table，使用 PyTorch 构建三层全连接网络；输入为连续浮点状态 `[RTT(ms), loss_percent, CWND]`，输出 5 个动作的 Q 值，动作分别对应 `CWND × 0.50 / 0.75 / 1.00 / 1.25 / 1.50`。
 
 ## DQN 深度强化学习模式
@@ -165,18 +240,30 @@ python3 sender.py \
   --dqn-model-file dqn_model.pt \
   --link-bandwidth-drop-after-packets 150 \
   --link-bandwidth-drop-factor 0.5 \
-  --metrics-file metrics.csv \
-  --history-file history.csv
+  --metrics-file artifacts/metrics/dqn_metrics.csv \
+  --history-file artifacts/metrics/dqn_history.csv
 ```
 
 多轮训练：
 
 ```bash
-python3 train_dqn.py --rounds 6 --packets 160 --dqn-model dqn_model.pt
+python3 train_dqn.py \
+  --rounds 50 \
+  --packets 160 \
+  --dqn-model dqn_model.pt \
+  --checkpoint-dir artifacts/checkpoints/dqn \
+  --summary-file artifacts/training/dqn_summary.csv
 ```
 
-运行时观察发送端日志中的 `[SENDER][DQN]`，其中会输出连续状态、动作编号、CWND 乘数、新 CWND、经验池大小和 reward。训练后的模型权重保存在 `dqn_model.pt`。
+DQN 训练默认同样只输出每轮指标摘要，例如：
+
+```text
+DQN training:   2%|...| 1/50 [..]
+[DQN-TRAIN] round=1/50 epsilon=0.350 acked=160/160 duration=...s throughput=...Mbps avg_rtt=...ms srtt=...ms retx=... fast=... timeout=... ckpt=artifacts/checkpoints/dqn/...
+```
+
+每轮结束后会保存一份模型 checkpoint，并将 round、epsilon、checkpoint、吞吐、RTT、重传等指标追加到 summary CSV。如需观察发送端日志中的 `[SENDER][DQN]` 连续状态、动作编号、CWND 乘数、新 CWND、经验池大小和 reward，可额外加 `--verbose-sender`。训练后的最新模型权重保存在 `dqn_model.pt`。
 
 ## 环境要求
 
-核心可靠传输、AIMD 和 Q-Learning 功能只依赖 Python 标准库。若需要生成 PNG 图表，需要安装 `matplotlib`；若需要启用 DQN 深度强化学习模式，需要安装 `torch`。
+核心可靠传输、AIMD 和 Q-Learning 功能只依赖 Python 标准库。若需要训练进度条，建议安装 `tqdm`；若需要生成 PNG 图表，需要安装 `matplotlib`；若需要启用 DQN 深度强化学习模式，需要安装 `torch`。

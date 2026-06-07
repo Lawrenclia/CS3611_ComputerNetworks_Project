@@ -1,0 +1,318 @@
+\documentclass[a4paper, 11pt]{article}
+\usepackage[UTF8,fontset=fandol]{ctex}
+\usepackage[top=2.0cm, bottom=2.0cm, left=2.2cm, right=2.2cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{tabularx}
+\usepackage{multirow}
+
+\graphicspath{{figures/}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small CS3611 计算机网络大作业}
+\fancyhead[R]{\small 题目五}
+\fancyfoot[C]{\small \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\titlespacing*{\section}{0pt}{7pt}{3pt}
+\titlespacing*{\subsection}{0pt}{5pt}{2pt}
+\titlespacing*{\subsubsection}{0pt}{3pt}{1pt}
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection}{0.5em}{}
+\setlist{nosep, leftmargin=1.4em}
+\setlength{\parskip}{2pt}
+\setlength{\parindent}{2em}
+
+\lstset{
+  basicstyle=\footnotesize\ttfamily,
+  backgroundcolor=\color{gray!8},
+  frame=single,
+  framerule=0.3pt,
+  rulecolor=\color{gray!50},
+  breaklines=true,
+  columns=flexible,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  xleftmargin=1.2em,
+  framexleftmargin=0.8em,
+  tabsize=4
+}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!70!black,
+  citecolor=green!50!black,
+  urlcolor=blue!60!black
+}
+
+\newcommand{\reporttitle}{题目五：基于 UDP 的应用层可靠传输与 AI 驱动拥塞控制协议实现}
+\newcommand{\teamid}{第 XX 组（成员姓名与学号待最终核对）}
+\newcommand{\done}{$\checkmark$}
+
+\begin{document}
+
+\thispagestyle{empty}
+\begin{center}
+  \vspace*{2.0cm}
+  {\fontsize{28pt}{36pt}\selectfont\bfseries CS3611}\\[8pt]
+  {\fontsize{22pt}{30pt}\selectfont\bfseries 计算机网络大作业}\\[10pt]
+  {\large\itshape 2026 Spring}\\[1.4cm]
+  \noindent\rule{0.66\textwidth}{0.8pt}\\[0.9cm]
+  {\LARGE\bfseries \reporttitle}\\[0.8cm]
+  {\Large \teamid}\\[1.0cm]
+  \noindent\rule{0.66\textwidth}{0.8pt}\\[0.8cm]
+  {\large\bfseries 小组成员}\\[0.35cm]
+  \begin{tabular}{|c|c|c|}
+    \hline
+    \textbf{序号} & \textbf{姓名 / GitHub 账号} & \textbf{学号} \\
+    \hline
+    1 & 蒋昊翔 / Lawrenclia & 524030910083 \\
+    \hline
+    2 & dumeili114514 & 待补 \\
+    \hline
+    3 & gggggs1 & 待补 \\
+    \hline
+    4 & liujin / hero-always & 待补 \\
+    \hline
+  \end{tabular}
+  \vfill
+  {\large \today}
+  \vspace{1.0cm}
+\end{center}
+\newpage
+
+\setcounter{page}{1}
+
+\section{项目概述}
+
+\subsection{实验目标}
+本项目模拟 QUIC 将可靠传输和拥塞控制上移到应用层的思想，基于 Python 原生 UDP Socket 实现带有确认、重传、滑动窗口和拥塞窗口控制的可靠传输协议。在此基础上，项目构建虚拟瓶颈链路，对比传统 AIMD 与 Q-Learning、DQN 两类智能拥塞控制策略在吞吐、时延和重传方面的表现。
+
+\subsection{完成情况总览}
+\begin{table}[H]
+\centering
+\caption{功能完成情况}
+\small
+\begin{tabularx}{\textwidth}{l X c}
+\toprule
+\textbf{类别} & \textbf{功能点} & \textbf{状态} \\
+\midrule
+\multirow{5}{*}{基础功能}
+  & UDP Payload 中封装 Sequence Number、Timestamp 与 1024 字节 Payload & \done \\
+  & 接收端累计 ACK、发送端未确认队列、RTO 定时重传与 SRTT 采样 & \done \\
+  & 虚拟瓶颈链路：固定服务速率、有限队列、排队延迟与队列溢出丢包 & \done \\
+  & AIMD 拥塞控制基线：ACK 加性增、超时或快速重传时乘性减 & \done \\
+  & Q-Learning 控制器：6 状态、3 动作、在线 Q-Table 更新与可视化 & \done \\
+\midrule
+\multirow{3}{*}{扩展功能}
+  & 带宽中途减半，观察控制器对动态网络突变的响应 & \done \\
+  & 连续 3 个重复 ACK 触发快速重传，接收端缓存乱序分组 & \done \\
+  & DQN 深度强化学习控制器，使用 PyTorch 模型输出 CWND 乘数动作 & \done \\
+\midrule
+未选择项 & 学生自定义开放性问题：本组未选择该可选扩展，本文不计入完成范围 & 未选 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{需求覆盖与提交物清单}
+除自定义开放性问题外，题目五基础功能和已选扩展均已完成。代码、实验数据和文档提交物对应关系如下。
+
+\begin{table}[H]
+\centering
+\caption{题目要求与仓库文件对应关系}
+\footnotesize
+\begin{tabularx}{\textwidth}{l X X}
+\toprule
+\textbf{要求项} & \textbf{实现与证据} & \textbf{提交物} \\
+\midrule
+应用层可靠传输 & \texttt{protocol.py} 定义 \texttt{SEQ+Timestamp+Payload} 与 ACK；\texttt{sender.py} 维护 \texttt{unacked}、ACK worker、timer worker、RTO 重传、RTT/SRTT；\texttt{receiver.py} 返回累计 ACK & \texttt{protocol.py}, \texttt{sender.py}, \texttt{receiver.py} \\
+虚拟瓶颈链路 & \texttt{VirtualFunnelLink} 在 \texttt{sendto()} 外层实现有限 FIFO 队列、固定服务间隔、队列满丢弃和链路统计 & \texttt{virtual\_link.py} \\
+AIMD 与 Q-Learning & \texttt{sender.py} 中 \texttt{CongestionController} 支持 \texttt{fixed/aimd/qlearning}；Q-Learning 使用 6 状态、3 动作、\(\epsilon\)-greedy 和 Bellman 更新 & \texttt{q\_table.json}, \texttt{train\_q\_learning.py}, \texttt{artifacts/training/} \\
+数据记录与可视化 & Sender 输出 \texttt{artifacts/metrics/metrics.csv} 与 \texttt{artifacts/metrics/history.csv}；\texttt{plot\_metrics.py} 生成 CWND、吞吐和 RTT 对比图；报告包含 Q-Learning 多轮趋势图 & \texttt{artifacts/metrics/}, \texttt{plot\_metrics.py}, \texttt{report/figures/*.png} \\
+动态突变、快重传、DQN & \texttt{--link-bandwidth-drop-after-packets} 模拟中途带宽减半；3 个重复 ACK 触发 FAST 重传；DQN 用连续状态和 PyTorch 网络输出 CWND 乘数 & \texttt{dqn\_model.pt}, \texttt{train\_dqn.py}, \texttt{artifacts/demo\_results/} \\
+演示与文档 & 一键演示依次运行 AIMD、Q-Learning、DQN 和带宽突变场景，保存日志、CSV 和图表；本报告与 poster 使用同一批结果 & \texttt{Run\_Demo.command}, \texttt{demo\_runner.py}, \texttt{report/output/} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{模块与分工}
+分工依据本地 Git 提交记录、分支和 GitHub PR 记录整理。PR \#1（\texttt{finish project5}）合并了可靠传输、虚拟链路、AIMD/Q-Learning、CSV 记录与可视化主线；PR \#2（\texttt{Add DQN-based congestion control and training script}）合并了 DQN 扩展。自动化 review / conflict-fix 机器人只作为辅助工具，不计入小组成员贡献。
+
+\begin{table}[H]
+\centering
+\caption{GitHub commit 级别分工明细}
+\scriptsize
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.05cm} >{\raggedright\arraybackslash}p{2.45cm} X >{\raggedright\arraybackslash}p{3.15cm}}
+\toprule
+\textbf{成员 / 账号} & \textbf{主要证据} & \textbf{具体工作} & \textbf{产出} \\
+\midrule
+Lawrenclia / Haoxiang Jiang & \texttt{6a688ac}, \texttt{1ac1838}, \texttt{efe154b}, \texttt{06282cd}, \texttt{124c984}, PR \#1 管理 & 初始化仓库与 README；建立可靠传输底层，补齐 \texttt{SEQ/Timestamp/Payload} 封装、发送端未确认队列、ACK 接收线程、RTO timer、RTT/SRTT 采样；实现/整合快速重传和乱序处理说明；重构实验脚本，修复 Q-Table、metrics、history 输出目录问题；整合报告、poster 和一键演示。 & \texttt{protocol.py}; \texttt{sender.py}; \texttt{receiver.py}; README; demo/report/poster \\
+dumeili114514 & \texttt{92d880d}, \texttt{dc95a4e} & 设计早期 Q-Learning 智能拥塞控制核心：6 个 RTT 趋势/丢包离散状态、保持/加一/减半 3 个动作、奖励函数、\(\epsilon\)-greedy 探索与 Bellman 更新；编写多轮 Q-Learning 训练脚本；补入 AIMD 基线，在 ACK 时加性增、拥塞信号时乘性减，并配合 benchmark/绘图验证。 & \texttt{congestion\_control.py}; \texttt{train\_q\_learning.py}; Q-Learning/AIMD 逻辑 \\
+ggggs1 & \texttt{228a9ae}, \texttt{e790d8d}, PR \#1 分支 & 实现虚拟网络拓扑模拟：\texttt{VirtualFunnelLink} 有限 FIFO 队列、固定服务间隔、队列溢出丢包、链路统计和日志；将虚拟链路参数接入 Sender；完成题目五收尾文档，添加 \texttt{plot\_metrics.py} 以及 AIMD/Q-Learning 对比图，支撑报告中的实验数据与可视化。 & \texttt{virtual\_link.py}; \texttt{plot\_metrics.py}; required comparison 图; 实验提交文档 \\
+liujin / hero-always & \texttt{b7cf010}, PR \#2 & 完成 DQN 扩展：在 \texttt{sender.py} 增加 \texttt{dqn} 模式、连续状态 \([RTT, loss\%, CWND]\)、状态归一化、动作乘数 \((0.50,0.75,1.00,1.25,1.50)\)、经验回放、SmoothL1 loss、target network、模型加载/保存和 DQN 日志；编写 \texttt{train\_dqn.py} 多轮训练脚本，提交模型权重与 DQN 对比实验图。 & \texttt{train\_dqn.py}; \texttt{dqn\_model.pt}; DQN comparison 图; \texttt{artifacts/training/} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{系统设计}
+
+\subsection{整体架构}
+系统由 Sender、Receiver、应用层协议封装、虚拟瓶颈链路、拥塞控制器和数据记录流水线组成。Sender 产生固定大小分组并按当前 CWND 控制在途包数量；VirtualFunnelLink 在真实 \texttt{sendto()} 之前模拟固定带宽和有限缓存；Receiver 维护期望序号并返回累计 ACK；Sender 根据 ACK 采样 RTT、推进窗口并触发智能控制器。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{system_architecture.png}
+  \caption{系统架构与数据反馈路径}
+  \label{fig:arch}
+\end{figure}
+
+\subsection{应用层 UDP 协议}
+\begin{table}[H]
+\centering
+\caption{自定义数据包与 ACK 格式}
+\small
+\begin{tabular}{lcl}
+\toprule
+\textbf{字段} & \textbf{长度} & \textbf{说明} \\
+\midrule
+Sequence Number & 4 Bytes & 无符号整数，标识分组序号 \\
+Timestamp & 8 Bytes & 发送端写入 Unix 时间戳，用于 RTT 采样 \\
+Payload & 1024 Bytes & 固定长度数据负载 \\
+ACK Number & 4 Bytes & 接收端返回的最大连续确认序号，$-1$ 表示尚无连续分组 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+协议由 \texttt{protocol.py} 实现，核心格式为 \texttt{"!Id"} 与 \texttt{"!i"}。其中 \texttt{!} 表示网络字节序，\texttt{I} 为 4 字节无符号整数，\texttt{d} 为 8 字节浮点时间戳。每次新发或重传都会重新封包，以保证 Timestamp 反映本次上链路的时间。
+
+\subsection{可靠传输与虚拟链路}
+发送端用 \texttt{unacked} 字典保存未确认分组的 Payload、最近发送时刻、写入报文的时间戳和发送次数。主线程只在 \texttt{len(unacked) < cwnd} 时发送新分组；ACK 线程收到累计 ACK 后删除所有 \texttt{seq <= ack\_number} 的记录，并根据被确认分组的 Timestamp 计算 RTT 与 SRTT；Timer 线程周期扫描 \texttt{unacked}，超过 RTO 即重传。
+
+虚拟瓶颈链路包装 Sender 的发送动作。应用层数据先进入容量有限的 FIFO 队列，再由后台线程按固定服务间隔发往真实 UDP Socket。若队列已满，虚拟链路直接丢弃新分组并记录丢包日志；若启用带宽突变参数，链路会在转发指定包数后调大服务间隔，模拟带宽突然下降。
+
+\section{核心实现}
+
+\subsection{AIMD 基线}
+AIMD 模式复现 TCP Reno 的拥塞避免思想。初始化 $CWND=1$；每收到新 ACK，执行
+\[
+CWND \leftarrow \min(CWND_{\max}, CWND + \frac{newly\_acked}{CWND})
+\]
+当 RTO 或快速重传表示出现拥塞信号时，执行
+\[
+CWND \leftarrow \max(1, CWND / 2)
+\]
+因此 AIMD 曲线应呈现“逐步上升、拥塞后骤降、再重新上升”的锯齿形态。
+
+\subsection{Q-Learning 智能拥塞控制}
+Q-Learning 控制器每个控制周期统计 ACK 数、平均 RTT、重传次数和 RTO timeout 次数，使用 6 个离散状态：
+\[
+State = \{RTT\_up, RTT\_down, RTT\_stable\} \times \{loss, no\_loss\}
+\]
+动作空间为 $0$ 保持、$1$ 表示 $CWND+1$、$2$ 表示 $CWND/2$。调参后的奖励函数使用 timeout-heavy 惩罚：
+\[
+R = \alpha G - \beta N_{timeout} - \gamma N_{retx} - \delta RTT_{ms}
+\]
+其中 \(G\) 为控制周期内成功确认的分组数，可作为 goodput 代理；\(N_{timeout}\) 为 RTO 超时次数；\(N_{retx}\) 为总重传次数；\(RTT_{ms}\) 为控制周期平均 RTT。默认权重为 \(\alpha=1.0\)、\(\beta=10.0\)、\(\gamma=2.0\)、\(\delta=0.015\)。由于 timeout 会同时计入 \(N_{timeout}\) 和 \(N_{retx}\)，单次 RTO 默认扣分明显高于 fast retransmit，更符合 timeout 对性能破坏更大的常识。每轮结束后按 Bellman 公式更新 Q 值：
+\[
+Q(s,a) \leftarrow Q(s,a) + \alpha (R + \gamma \max_{a'}Q(s',a') - Q(s,a))
+\]
+训练后的表格策略保存到 \texttt{q\_table.json}，运行时可通过 \texttt{--epsilon 0.0} 使用预训练策略进行稳定评估。
+
+\subsection{DQN 扩展}
+DQN 模式将离散 Q-Table 扩展为神经网络控制器。输入为 RTT、丢包率和当前 CWND 组成的连续状态，输出 5 个动作的 Q 值；动作对应 $0.50$ 到 $1.50$ 的 CWND 乘数。模型由三层全连接网络实现，并通过经验回放和 target network 训练，权重保存为 \texttt{dqn\_model.pt}。该扩展用于探索连续网络状态下更细粒度的拥塞响应。
+
+\section{测试与结果}
+
+\subsection{测试环境与方法}
+实验使用本地环回地址 \texttt{127.0.0.1}，每轮传输 300 个 UDP 数据分组，Receiver 端加入少量随机丢包、延迟和抖动，Sender 启用虚拟瓶颈链路。Q-Learning 和 DQN 训练脚本默认进行 50 轮训练，并建议正式复现实验时使用 50--100 轮观察趋势。所有模式默认输出到 \texttt{artifacts/metrics/} 或 \texttt{artifacts/training/}，再由 \texttt{plot\_metrics.py} 在 \texttt{artifacts/plots/} 生成 CWND、吞吐量和 RTT 对比图。一键演示脚本 \texttt{demo\_runner.py} 会依次运行 AIMD、Q-Learning、DQN 以及带宽突变场景，并将完整结果保存到 \texttt{artifacts/demo\_results/}。
+
+\begin{table}[H]
+\centering
+\caption{2026-06-04 一键演示实验结果}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrrr}
+\toprule
+\textbf{模式} & \textbf{确认} & \textbf{耗时(s)} & \textbf{吞吐(Mbps)} & \textbf{平均RTT(ms)} & \textbf{SRTT(ms)} & \textbf{重传} & \textbf{快速重传} \\
+\midrule
+AIMD & 300/300 & 4.113 & 0.597 & 89.783 & 114.360 & 25 & 18 \\
+Q-Learning & 300/300 & 6.375 & 0.385 & 19.183 & 44.648 & 14 & 0 \\
+DQN & 300/300 & 6.880 & 0.357 & 18.102 & 12.714 & 9 & 0 \\
+Q-Learning 带宽减半 & 300/300 & 6.674 & 0.368 & 66.715 & 59.180 & 38 & 16 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.94\textwidth]{comparison_main.png}
+  \caption{AIMD、Q-Learning 与 DQN 的 CWND、吞吐量和平均 RTT 对比}
+  \label{fig:main}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.82\textwidth]{qlearning_convergence.png}
+  \caption{Q-Learning 多轮训练/评估趋势：吞吐、平均 RTT 与重传次数}
+  \label{fig:qconv}
+\end{figure}
+
+\subsection{结果分析}
+三种模式均完成 300/300 分组可靠交付，说明应用层 ACK、重传、乱序处理和累计确认机制有效。AIMD 的吞吐量最高，为 0.597 Mbps，但平均 RTT 达 89.783 ms，且发生 25 次重传，其中 18 次由快速重传触发；这与其主动探测带宽、不断推高 CWND 的设计一致。
+
+Q-Learning 与 DQN 更保守，牺牲部分吞吐换取低时延与更稳定的队列状态。Q-Learning 平均 RTT 为 19.183 ms，DQN 平均 RTT 为 18.102 ms，均显著低于 AIMD。DQN 的重传次数进一步降至 9 次，说明连续状态输入和 CWND 乘数动作在本次实验条件下能保持较低排队延迟。图 \ref{fig:qconv} 使用训练指标 CSV 中的多轮 Q-Learning 记录绘制，展示了训练/评估过程中吞吐、RTT 和重传指标的变化；正式提交时推荐运行 50 或 100 轮，以得到更有说服力的收敛趋势。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.86\textwidth]{comparison_drop.png}
+  \caption{Q-Learning 在带宽中途减半场景下的恢复过程}
+  \label{fig:drop}
+\end{figure}
+
+带宽减半场景中，Q-Learning 仍完成所有分组交付，但平均 RTT 上升到 66.715 ms，重传增加到 38 次。其 CWND 曲线在突变后出现下降和再探索，表明虚拟链路突变扩展能够真实触发拥塞信号，也能用于现场演示不同控制策略的恢复过程。
+
+\section{操作手册}
+
+\subsection{环境准备}
+核心可靠传输、AIMD 与 Q-Learning 只依赖 Python 标准库；训练进度条需要 \texttt{tqdm}，绘图需要 \texttt{matplotlib}，DQN 需要 \texttt{torch}。
+\begin{lstlisting}[language=bash, caption=依赖安装]
+python3 -m pip install tqdm matplotlib torch
+\end{lstlisting}
+
+\subsection{运行方式}
+最简方式是在 macOS 双击 \texttt{Run\_Demo.command}，或在项目目录运行：
+\begin{lstlisting}[language=bash, caption=一键演示]
+python3 demo_runner.py
+\end{lstlisting}
+手动运行时，先启动 Receiver，再在另一个终端运行 Sender：
+\begin{lstlisting}[language=bash, caption=手动运行]
+python3 receiver.py --host 127.0.0.1 --port 9001 --initial-seq 0
+python3 sender.py --target-host 127.0.0.1 --target-port 9001 \
+  --packets 300 --cc-mode qlearning --window-size 1 \
+  --max-cwnd 80 --qtable-file q_table.json \
+  --metrics-file artifacts/metrics/metrics.csv \
+  --history-file artifacts/metrics/history.csv
+\end{lstlisting}
+生成对比图：
+\begin{lstlisting}[language=bash, caption=绘图]
+python3 plot_metrics.py --metrics-file artifacts/metrics/metrics.csv \
+  --history-file artifacts/metrics/history.csv \
+  --output artifacts/plots/comparison.png
+\end{lstlisting}
+
+\section{总结}
+本项目完成了题目五要求的 UDP 应用层可靠传输、虚拟瓶颈链路、AIMD 基线、Q-Learning 智能拥塞控制和实验可视化，并实现了动态带宽突变、快速重传与乱序处理、DQN 深度强化学习三项扩展。实验结果表明，AIMD 更擅长快速抢占吞吐，但容易推高 RTT 并触发更多重传；Q-Learning 和 DQN 能以更保守的 CWND 控制显著降低时延，在应用层协议上体现出 AI 驱动拥塞控制的稳定性优势。
+
+\end{document}

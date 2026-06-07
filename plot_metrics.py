@@ -152,9 +152,9 @@ def plot(metrics: list[dict[str, str]], histories: dict[str, list[dict[str, str]
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plot AIMD/Q-Learning comparison from sender CSV logs")
-    parser.add_argument("--metrics-file", default="metrics.csv")
-    parser.add_argument("--history-file", default="history.csv")
-    parser.add_argument("--output", default="comparison.png")
+    parser.add_argument("--metrics-file", default="artifacts/metrics/metrics.csv")
+    parser.add_argument("--history-file", default="artifacts/metrics/history.csv")
+    parser.add_argument("--output", default="artifacts/plots/comparison.png")
     args = parser.parse_args()
 
     metrics = read_latest_metrics(Path(args.metrics_file))
