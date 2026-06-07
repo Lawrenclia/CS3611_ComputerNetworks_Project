@@ -139,6 +139,22 @@ python3 train_q_learning.py \
   --summary-file artifacts/training/qlearning_summary.csv
 ```
 
+推荐使用两阶段训练，第一阶段先在较温和环境里学会增大 CWND，第二阶段再提高丢包难度：
+
+```bash
+python3 train_q_curriculum.py --install
+```
+
+该命令会生成 `q_table_good.json`，并在 `--install` 时备份旧的 `q_table.json` 后安装新策略。当前 Q-Learning 状态包含 `RTT 趋势 + 是否重传 + CWND 档位` 共 18 个状态，低 CWND 且无丢包时会鼓励恢复性增窗，避免带宽突降后长期停在 `cwnd=1`。每次运行的 metrics、history、summary 会保存到 `artifacts/training/q_curriculum_时间戳/`，checkpoint 会保存到 `artifacts/checkpoints/q_curriculum_时间戳/`。
+
+快速单阶段调参时可直接使用：
+
+```bash
+python3 train_q_learning.py --fast --reset-q-table
+```
+
+`--fast` 会在不覆盖显式参数的前提下，把默认包数降到 60、Receiver delay 降到 5 ms、虚拟链路服务间隔降到 2 ms，并改为每 5 轮保存一次 checkpoint。`--reset-q-table` 会先备份旧 Q-Table，再写入一个按 CWND 档位区分的初始表：低窗口无丢包时优先增窗，有丢包时避免继续增窗，避免从坏表继续训练导致 CWND 长期卡在 1。
+
 输出格式示例：
 
 ```text
@@ -254,6 +270,14 @@ python3 train_dqn.py \
   --checkpoint-dir artifacts/checkpoints/dqn \
   --summary-file artifacts/training/dqn_summary.csv
 ```
+
+快速调参时可直接使用：
+
+```bash
+python3 train_dqn.py --fast
+```
+
+DQN 的 `--fast` 会把默认包数降到 80、Receiver delay 降到 5 ms、虚拟链路服务间隔降到 2 ms，并使用较小 batch/replay 设置，适合先看训练方向是否正常；正式对比再改回默认或手动指定更大的 `--packets`。
 
 DQN 训练默认同样只输出每轮指标摘要，例如：
 

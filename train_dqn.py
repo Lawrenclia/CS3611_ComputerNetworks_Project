@@ -125,6 +125,11 @@ def tqdm_postfix(row: dict[str, str] | None, checkpoint: Path | None) -> dict[st
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Multi-round DQN congestion-control trainer")
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        help="use a faster training preset for quick iteration",
+    )
     parser.add_argument("--rounds", type=int, default=50)
     parser.add_argument("--packets", type=int, default=160)
     parser.add_argument("--receiver-port", type=int, default=9301)
@@ -147,6 +152,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--loss-rate", type=float, default=0.06)
     parser.add_argument("--delay-ms", type=float, default=20.0)
     parser.add_argument("--jitter-ms", type=float, default=10.0)
+    parser.add_argument("--link-service-delay-ms", type=float, default=10.0)
+    parser.add_argument("--link-queue-capacity", type=int, default=20)
     parser.add_argument("--link-bandwidth-drop-after-packets", type=int, default=80)
     parser.add_argument("--link-bandwidth-drop-factor", type=float, default=0.5)
     parser.add_argument("--metrics-file", default="artifacts/training/dqn_metrics.csv")
@@ -160,14 +167,50 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def collect_cli_options(argv: list[str]) -> set[str]:
+    return {item.split("=", 1)[0] for item in argv if item.startswith("--")}
+
+
+def apply_fast_preset(args: argparse.Namespace, provided_options: set[str]) -> None:
+    if not args.fast:
+        return
+    replacements = {
+        "packets": ("--packets", 80),
+        "loss_rate": ("--loss-rate", 0.03),
+        "delay_ms": ("--delay-ms", 5.0),
+        "jitter_ms": ("--jitter-ms", 2.0),
+        "rto": ("--rto", 0.10),
+        "dqn_batch_size": ("--dqn-batch-size", 8),
+        "dqn_replay_capacity": ("--dqn-replay-capacity", 512),
+        "link_service_delay_ms": ("--link-service-delay-ms", 2.0),
+        "link_bandwidth_drop_after_packets": ("--link-bandwidth-drop-after-packets", 0),
+        "checkpoint_every": ("--checkpoint-every", 5),
+    }
+    for name, (option, value) in replacements.items():
+        if option not in provided_options:
+            setattr(args, name, value)
+
+
 def main() -> None:
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
+    apply_fast_preset(args, collect_cli_options(sys.argv[1:]))
     if args.rounds <= 0:
         raise SystemExit("--rounds must be positive")
     if args.packets <= 0:
         raise SystemExit("--packets must be positive")
     if not 0.0 <= args.loss_rate <= 1.0:
         raise SystemExit("--loss-rate must be in [0, 1]")
+    if args.delay_ms < 0:
+        raise SystemExit("--delay-ms must be non-negative")
+    if args.jitter_ms < 0:
+        raise SystemExit("--jitter-ms must be non-negative")
+    if args.link_service_delay_ms < 0:
+        raise SystemExit("--link-service-delay-ms must be non-negative")
+    if args.link_queue_capacity <= 0:
+        raise SystemExit("--link-queue-capacity must be positive")
+    if args.link_bandwidth_drop_after_packets < 0:
+        raise SystemExit("--link-bandwidth-drop-after-packets must be non-negative")
     if args.checkpoint_every <= 0:
         raise SystemExit("--checkpoint-every must be positive")
     if args.reward_throughput_weight < 0:
@@ -243,6 +286,10 @@ def main() -> None:
                 str(args.window_size),
                 "--rto",
                 str(args.rto),
+                "--link-service-delay-ms",
+                str(args.link_service_delay_ms),
+                "--link-queue-capacity",
+                str(args.link_queue_capacity),
                 "--cc-mode",
                 "dqn",
                 "--max-cwnd",

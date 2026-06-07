@@ -2,12 +2,24 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import Callable
+
+Q_TREND_NAMES = ("rtt_up", "rtt_down", "rtt_stable")
+Q_LOSS_NAMES = ("no_loss", "loss")
+Q_CWND_BUCKETS = ("cwnd_low", "cwnd_mid", "cwnd_high")
+Q_STATE_NAMES = tuple(
+    f"{trend}|{loss}|{bucket}"
+    for trend in Q_TREND_NAMES
+    for loss in Q_LOSS_NAMES
+    for bucket in Q_CWND_BUCKETS
+)
+Q_ACTION_KEYS = ("0", "1", "2")
 
 
 def load_tqdm() -> Callable[..., object] | None:
@@ -37,6 +49,46 @@ def save_checkpoint(source: Path, checkpoint_dir: Path, round_index: int, row: d
     target = checkpoint_dir / f"qlearning_round_{round_index:03d}_{run_id}.json"
     shutil.copy2(source, target)
     return target
+
+
+def seed_q_table(path: Path, backup_dir: Path) -> Path | None:
+    backup = None
+    if path.exists():
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        backup = backup_dir / f"{path.stem}_backup_{time.strftime('%Y%m%d-%H%M%S')}{path.suffix}"
+        shutil.copy2(path, backup)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "metadata": {
+            "state_features": ["rtt_trend", "loss_flag", "cwnd_bucket"],
+            "state_count": len(Q_STATE_NAMES),
+            "actions": {"0": "hold", "1": "cwnd+1", "2": "cwnd/2"},
+        }
+    }
+    for state in Q_STATE_NAMES:
+        trend, loss_flag, bucket = state.split("|")
+        data[state] = seed_values_for_state(trend, loss_flag, bucket)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    return backup
+
+
+def seed_values_for_state(trend: str, loss_flag: str, bucket: str) -> dict[str, float]:
+    if loss_flag == "loss":
+        if bucket == "cwnd_low":
+            return {"0": 0.3, "1": -2.5, "2": 0.5}
+        return {"0": -0.2, "1": -2.0, "2": 2.0}
+
+    if bucket == "cwnd_low":
+        return {"0": 0.2, "1": 3.0, "2": -3.0}
+    if bucket == "cwnd_mid":
+        if trend == "rtt_up":
+            return {"0": 0.7, "1": 0.2, "2": 0.0}
+        return {"0": 0.2, "1": 1.6, "2": -0.8}
+    if trend == "rtt_up":
+        return {"0": 0.8, "1": -0.5, "2": 1.0}
+    if trend == "rtt_down":
+        return {"0": 0.5, "1": 0.8, "2": -0.5}
+    return {"0": 1.0, "1": 0.0, "2": -0.2}
 
 
 def append_summary(
@@ -125,30 +177,39 @@ def tqdm_postfix(row: dict[str, str] | None, checkpoint: Path | None) -> dict[st
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Multi-round Q-Learning training runner")
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        help="use a faster training preset for quick iteration",
+    )
     parser.add_argument("--rounds", type=int, default=50)
     parser.add_argument("--packets", type=int, default=120)
     parser.add_argument("--receiver-port", type=int, default=9201)
     parser.add_argument("--sender-port", type=int, default=9200)
     parser.add_argument("--window-size", type=int, default=8)
-    parser.add_argument("--max-window", type=int, default=32)
+    parser.add_argument("--max-window", type=int, default=64)
     parser.add_argument("--rto", type=float, default=0.20)
     parser.add_argument("--q-table", default="q_table.json")
-    parser.add_argument("--q-alpha", type=float, default=0.30)
+    parser.add_argument("--reset-q-table", action="store_true", help="backup and re-seed the Q-table before training")
+    parser.add_argument("--qtable-backup-dir", default="artifacts/training/qtable_backups")
+    parser.add_argument("--q-alpha", type=float, default=0.15)
     parser.add_argument("--q-gamma", type=float, default=0.85)
-    parser.add_argument("--q-epsilon", type=float, default=0.30)
+    parser.add_argument("--q-epsilon", type=float, default=0.45)
     parser.add_argument("--reward-throughput-weight", type=float, default=1.0)
-    parser.add_argument("--reward-timeout-weight", type=float, default=10.0)
-    parser.add_argument("--reward-retx-weight", type=float, default=2.0)
-    parser.add_argument("--reward-rtt-weight", type=float, default=0.015)
-    parser.add_argument("--epsilon-decay", type=float, default=0.85)
-    parser.add_argument("--min-epsilon", type=float, default=0.05)
-    parser.add_argument("--loss-rate", type=float, default=0.08)
+    parser.add_argument("--reward-timeout-weight", type=float, default=8.0)
+    parser.add_argument("--reward-retx-weight", type=float, default=1.5)
+    parser.add_argument("--reward-rtt-weight", type=float, default=0.010)
+    parser.add_argument("--epsilon-decay", type=float, default=0.97)
+    parser.add_argument("--min-epsilon", type=float, default=0.08)
+    parser.add_argument("--loss-rate", type=float, default=0.04)
     parser.add_argument("--delay-ms", type=float, default=20.0)
     parser.add_argument("--jitter-ms", type=float, default=10.0)
+    parser.add_argument("--link-service-delay-ms", type=float, default=10.0)
+    parser.add_argument("--link-queue-capacity", type=int, default=20)
     parser.add_argument("--metrics-file", default="artifacts/training/qlearning_metrics.csv")
     parser.add_argument("--history-file", default="artifacts/training/qlearning_history.csv")
     parser.add_argument("--checkpoint-dir", default="artifacts/checkpoints/qlearning")
-    parser.add_argument("--checkpoint-every", type=int, default=1)
+    parser.add_argument("--checkpoint-every", type=int, default=5)
     parser.add_argument("--summary-file", default="artifacts/training/qlearning_summary.csv")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--quiet-sender", action="store_true", help=argparse.SUPPRESS)
@@ -156,14 +217,45 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def collect_cli_options(argv: list[str]) -> set[str]:
+    return {item.split("=", 1)[0] for item in argv if item.startswith("--")}
+
+
+def apply_fast_preset(args: argparse.Namespace, provided_options: set[str]) -> None:
+    if not args.fast:
+        return
+    replacements = {
+        "packets": ("--packets", 60),
+        "loss_rate": ("--loss-rate", 0.04),
+        "delay_ms": ("--delay-ms", 5.0),
+        "jitter_ms": ("--jitter-ms", 2.0),
+        "rto": ("--rto", 0.10),
+        "link_service_delay_ms": ("--link-service-delay-ms", 2.0),
+        "checkpoint_every": ("--checkpoint-every", 5),
+    }
+    for name, (option, value) in replacements.items():
+        if option not in provided_options:
+            setattr(args, name, value)
+
+
 def main() -> None:
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
+    apply_fast_preset(args, collect_cli_options(sys.argv[1:]))
     if args.rounds <= 0:
         raise SystemExit("--rounds must be positive")
     if args.packets <= 0:
         raise SystemExit("--packets must be positive")
     if not 0.0 <= args.loss_rate <= 1.0:
         raise SystemExit("--loss-rate must be in [0, 1]")
+    if args.delay_ms < 0:
+        raise SystemExit("--delay-ms must be non-negative")
+    if args.jitter_ms < 0:
+        raise SystemExit("--jitter-ms must be non-negative")
+    if args.link_service_delay_ms < 0:
+        raise SystemExit("--link-service-delay-ms must be non-negative")
+    if args.link_queue_capacity <= 0:
+        raise SystemExit("--link-queue-capacity must be positive")
     if args.checkpoint_every <= 0:
         raise SystemExit("--checkpoint-every must be positive")
     if args.reward_throughput_weight < 0:
@@ -181,6 +273,14 @@ def main() -> None:
     history_file = str((root / args.history_file).resolve())
     checkpoint_dir = (root / args.checkpoint_dir).resolve()
     summary_file = (root / args.summary_file).resolve()
+    qtable_backup_dir = (root / args.qtable_backup_dir).resolve()
+    if args.reset_q_table:
+        backup = seed_q_table(Path(q_table), qtable_backup_dir)
+        if backup is None:
+            print(f"[TRAIN] seeded new Q-table at {q_table}", flush=True)
+        else:
+            print(f"[TRAIN] backed up old Q-table to {backup}", flush=True)
+            print(f"[TRAIN] seeded fresh Q-table at {q_table}", flush=True)
     receiver_cmd = [
         sys.executable,
         str(root / "receiver.py"),
@@ -242,6 +342,10 @@ def main() -> None:
                 str(args.window_size),
                 "--rto",
                 str(args.rto),
+                "--link-service-delay-ms",
+                str(args.link_service_delay_ms),
+                "--link-queue-capacity",
+                str(args.link_queue_capacity),
                 "--cc-mode",
                 "qlearning",
                 "--max-cwnd",
