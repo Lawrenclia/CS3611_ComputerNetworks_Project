@@ -27,12 +27,12 @@ for ((i=0; i<ROUNDS; i++)); do
         --max-cwnd 32 \
         --epsilon $EPSILON \
         --rto 0.2 \
-        --dqn-model-file "$ROOT/dqn_model.pt" \
+        --dqn-model-file "$ROOT/artifacts/models/active/dqn_model.pt" \
         --dqn-lr 0.0005 \
         --dqn-batch-size 32 \
         --dqn-replay-capacity 2048 \
-        --metrics-file "$ROOT/metrics.csv" \
-        --history-file "$ROOT/history.csv" \
+        --metrics-file "$ROOT/artifacts/training/dqn_metrics.csv" \
+        --history-file "$ROOT/artifacts/training/dqn_history.csv" \
         --quiet
     if [ $? -ne 0 ]; then
         echo "[LOOP] Round $((i+1)) FAILED!"

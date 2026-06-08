@@ -21,6 +21,25 @@
 - `题目五实验报告.md`：仅保留可靠传输底层架构说明。
 - `答辩讲稿提纲.md`：仅保留可靠传输部分的答辩讲稿。
 
+## 产物位置
+
+| 类型 | 位置 |
+| --- | --- |
+| 当前 Q-Learning 权重 | `artifacts/models/active/q_table.json` |
+| 当前 DQN 权重 | `artifacts/models/active/dqn_model.pt` |
+| 待安装候选权重 | `artifacts/models/candidates/` |
+| 权重备份 | `artifacts/models/backups/` |
+| 训练指标 CSV | `artifacts/training/` |
+| Q-Learning checkpoint | `artifacts/checkpoints/qlearning/` 或 `artifacts/checkpoints/q_curriculum_时间戳/` |
+| DQN checkpoint | `artifacts/checkpoints/dqn/` |
+| 单次绘图输出 | `artifacts/plots/` |
+| 一键 demo 图片和 HTML | `artifacts/demo_results/时间戳/` |
+| 报告/Poster 使用图片 | `report/figures/` |
+| 最终报告 PDF 与 Poster PPTX | `report/output/` |
+| 旧版零散输出归档 | `artifacts/legacy/` |
+
+根目录下旧的 `q_table.json`、`q_table_good.json`、`q_table_curriculum.json` 和 `dqn_model.pt` 仅作为兼容副本保留；新训练和演示默认读写 `artifacts/models/active/`。
+
 ## 协议格式
 
 数据包格式：
@@ -100,10 +119,10 @@ python3 sender.py --cc-mode fixed --window-size 8
 python3 sender.py --cc-mode aimd --window-size 1 --max-cwnd 80
 
 # Q-Learning：按 RTT 趋势和丢包事件离散成 6 个状态，动作是保持、CWND+1、CWND/2
-python3 sender.py --cc-mode qlearning --window-size 1 --max-cwnd 80 --qtable-file q_table.json
+python3 sender.py --cc-mode qlearning --window-size 1 --max-cwnd 80
 
 # DQN：输入连续状态 [精确 RTT, 丢包率百分比, 当前 CWND]，神经网络输出 CWND 乘数动作
-python3 sender.py --cc-mode dqn --window-size 8 --max-cwnd 80 --dqn-model-file dqn_model.pt
+python3 sender.py --cc-mode dqn --window-size 8 --max-cwnd 80
 ```
 
 Reward 可调参数：
@@ -134,7 +153,7 @@ reward = throughput_weight * acked_packets
 python3 train_q_learning.py \
   --rounds 50 \
   --packets 300 \
-  --q-table q_table.json \
+  --q-table artifacts/models/active/q_table.json \
   --checkpoint-dir artifacts/checkpoints/qlearning \
   --summary-file artifacts/training/qlearning_summary.csv
 ```
@@ -145,7 +164,7 @@ python3 train_q_learning.py \
 python3 train_q_curriculum.py --install
 ```
 
-该命令会生成 `q_table_good.json`，并在 `--install` 时备份旧的 `q_table.json` 后安装新策略。当前 Q-Learning 状态包含 `RTT 趋势 + 是否重传 + CWND 档位` 共 18 个状态，低 CWND 且无丢包时会鼓励恢复性增窗，避免带宽突降后长期停在 `cwnd=1`。每次运行的 metrics、history、summary 会保存到 `artifacts/training/q_curriculum_时间戳/`，checkpoint 会保存到 `artifacts/checkpoints/q_curriculum_时间戳/`。
+该命令会生成候选表 `artifacts/models/candidates/q_table_good.json`，并在 `--install` 时备份旧的 active Q-Table 后安装新策略到 `artifacts/models/active/q_table.json`。当前 Q-Learning 严格使用题目要求的 6 个状态：`RTT 趋势(变大/变小/平稳) × 是否发生丢包/重传`。每次运行的 metrics、history、summary 会保存到 `artifacts/training/q_curriculum_时间戳/`，checkpoint 会保存到 `artifacts/checkpoints/q_curriculum_时间戳/`。
 
 快速单阶段调参时可直接使用：
 
@@ -153,7 +172,7 @@ python3 train_q_curriculum.py --install
 python3 train_q_learning.py --fast --reset-q-table
 ```
 
-`--fast` 会在不覆盖显式参数的前提下，把默认包数降到 60、Receiver delay 降到 5 ms、虚拟链路服务间隔降到 2 ms，并改为每 5 轮保存一次 checkpoint。`--reset-q-table` 会先备份旧 Q-Table，再写入一个按 CWND 档位区分的初始表：低窗口无丢包时优先增窗，有丢包时避免继续增窗，避免从坏表继续训练导致 CWND 长期卡在 1。
+`--fast` 会在不覆盖显式参数的前提下，把默认包数降到 60、Receiver delay 降到 5 ms、虚拟链路服务间隔降到 2 ms，并改为每 5 轮保存一次 checkpoint。`--reset-q-table` 会先备份旧 Q-Table，再写入一个 6 状态初始表：RTT 下降或稳定且无丢包时倾向增窗，发生丢包/重传时倾向减窗，避免从坏表继续训练导致 CWND 长期卡在 1。
 
 输出格式示例：
 
@@ -183,8 +202,11 @@ python3 sender.py \
 python3 plot_metrics.py \
   --metrics-file artifacts/metrics/metrics.csv \
   --history-file artifacts/metrics/history.csv \
-  --output artifacts/plots/comparison.png
+  --output artifacts/plots/comparison.png \
+  --smooth-window 5
 ```
+
+`plot_metrics.py` 会保留 Q-Learning 的原始 CWND 曲线，并额外叠加一条移动平均曲线。原始曲线用于展示真实探索、丢包和 timeout 反馈，移动平均曲线用于观察整体控制趋势；若要关闭平滑，设置 `--smooth-window 1`。
 
 ## 虚拟瓶颈链路
 
@@ -253,7 +275,7 @@ python3 sender.py \
   --window-size 8 \
   --max-cwnd 80 \
   --epsilon 0.20 \
-  --dqn-model-file dqn_model.pt \
+  --dqn-model-file artifacts/models/active/dqn_model.pt \
   --link-bandwidth-drop-after-packets 150 \
   --link-bandwidth-drop-factor 0.5 \
   --metrics-file artifacts/metrics/dqn_metrics.csv \
@@ -266,7 +288,7 @@ python3 sender.py \
 python3 train_dqn.py \
   --rounds 50 \
   --packets 160 \
-  --dqn-model dqn_model.pt \
+  --dqn-model artifacts/models/active/dqn_model.pt \
   --checkpoint-dir artifacts/checkpoints/dqn \
   --summary-file artifacts/training/dqn_summary.csv
 ```
@@ -286,7 +308,7 @@ DQN training:   2%|...| 1/50 [..]
 [DQN-TRAIN] round=1/50 epsilon=0.350 acked=160/160 duration=...s throughput=...Mbps avg_rtt=...ms srtt=...ms retx=... fast=... timeout=... ckpt=artifacts/checkpoints/dqn/...
 ```
 
-每轮结束后会保存一份模型 checkpoint，并将 round、epsilon、checkpoint、吞吐、RTT、重传等指标追加到 summary CSV。如需观察发送端日志中的 `[SENDER][DQN]` 连续状态、动作编号、CWND 乘数、新 CWND、经验池大小和 reward，可额外加 `--verbose-sender`。训练后的最新模型权重保存在 `dqn_model.pt`。
+每轮结束后会保存一份模型 checkpoint，并将 round、epsilon、checkpoint、吞吐、RTT、重传等指标追加到 summary CSV。如需观察发送端日志中的 `[SENDER][DQN]` 连续状态、动作编号、CWND 乘数、新 CWND、经验池大小和 reward，可额外加 `--verbose-sender`。训练后的最新模型权重保存在 `artifacts/models/active/dqn_model.pt`。
 
 ## 环境要求
 

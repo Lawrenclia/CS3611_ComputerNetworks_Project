@@ -272,7 +272,7 @@ Q-Learning 带宽减半 & 300/300 & 6.674 & 0.368 & 66.715 & 59.180 & 38 & 16 \\
 \subsection{结果分析}
 三种模式均完成 300/300 分组可靠交付，说明应用层 ACK、重传、乱序处理和累计确认机制有效。AIMD 的吞吐量最高，为 0.597 Mbps，但平均 RTT 达 89.783 ms，且发生 25 次重传，其中 18 次由快速重传触发；这与其主动探测带宽、不断推高 CWND 的设计一致。
 
-Q-Learning 与 DQN 更保守，牺牲部分吞吐换取低时延与更稳定的队列状态。Q-Learning 平均 RTT 为 19.183 ms，DQN 平均 RTT 为 18.102 ms，均显著低于 AIMD。DQN 的重传次数进一步降至 9 次，说明连续状态输入和 CWND 乘数动作在本次实验条件下能保持较低排队延迟。图 \ref{fig:qconv} 使用训练指标 CSV 中的多轮 Q-Learning 记录绘制，展示了训练/评估过程中吞吐、RTT 和重传指标的变化；正式提交时推荐运行 50 或 100 轮，以得到更有说服力的收敛趋势。
+Q-Learning 与 DQN 更保守，牺牲部分吞吐换取低时延与更稳定的队列状态。Q-Learning 平均 RTT 为 19.183 ms，DQN 平均 RTT 为 18.102 ms，均显著低于 AIMD。需要注意的是，Q-Learning 的 CWND 原始曲线不必然光滑：训练和运行中存在 \(\epsilon\)-greedy 探索，6 个离散状态会压缩真实网络反馈，动作空间也只有保持、加一和减半三类；再叠加 RTT、丢包和 timeout 的随机性，曲线会出现合理抖动。因此本文保留原始曲线，并在绘图脚本中叠加移动平均线，用于观察整体控制趋势。DQN 的重传次数进一步降至 9 次，说明连续状态输入和 CWND 乘数动作在本次实验条件下能保持较低排队延迟。图 \ref{fig:qconv} 使用训练指标 CSV 中的多轮 Q-Learning 记录绘制，展示了训练/评估过程中吞吐、RTT 和重传指标的变化；正式提交时推荐运行 50 或 100 轮，以得到更有说服力的收敛趋势。
 
 \begin{figure}[H]
   \centering
@@ -301,7 +301,7 @@ python3 demo_runner.py
 python3 receiver.py --host 127.0.0.1 --port 9001 --initial-seq 0
 python3 sender.py --target-host 127.0.0.1 --target-port 9001 \
   --packets 300 --cc-mode qlearning --window-size 1 \
-  --max-cwnd 80 --qtable-file q_table.json \
+  --max-cwnd 80 --qtable-file artifacts/models/active/q_table.json \
   --metrics-file artifacts/metrics/metrics.csv \
   --history-file artifacts/metrics/history.csv
 \end{lstlisting}
@@ -309,7 +309,8 @@ python3 sender.py --target-host 127.0.0.1 --target-port 9001 \
 \begin{lstlisting}[language=bash, caption=绘图]
 python3 plot_metrics.py --metrics-file artifacts/metrics/metrics.csv \
   --history-file artifacts/metrics/history.csv \
-  --output artifacts/plots/comparison.png
+  --output artifacts/plots/comparison.png \
+  --smooth-window 5
 \end{lstlisting}
 
 \section{总结}

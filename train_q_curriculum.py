@@ -12,9 +12,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Two-stage Q-Learning curriculum trainer")
     parser.add_argument("--stage1-rounds", type=int, default=80)
     parser.add_argument("--stage2-rounds", type=int, default=100)
-    parser.add_argument("--q-table", default="q_table_curriculum.json")
-    parser.add_argument("--output-table", default="q_table_good.json")
-    parser.add_argument("--install", action="store_true", help="copy --output-table to q_table.json after training")
+    parser.add_argument("--q-table", default="artifacts/models/candidates/q_table_curriculum.json")
+    parser.add_argument("--output-table", default="artifacts/models/candidates/q_table_good.json")
+    parser.add_argument("--install", action="store_true", help="copy --output-table to artifacts/models/active/q_table.json after training")
     parser.add_argument("--continue-existing", action="store_true", help="continue from the existing --q-table instead of resetting it")
     parser.add_argument("--packets-stage1", type=int, default=120)
     parser.add_argument("--packets-stage2", type=int, default=160)
@@ -178,12 +178,12 @@ def main() -> None:
     if args.install:
         backup = backup_and_copy(
             source=output_table,
-            target=root / "q_table.json",
-            backup_dir=root / "artifacts" / "training" / "qtable_backups",
+            target=root / "artifacts" / "models" / "active" / "q_table.json",
+            backup_dir=root / "artifacts" / "models" / "backups",
         )
         if backup is not None:
-            print(f"[CURRICULUM] backed up previous q_table.json to {backup}", flush=True)
-        print("[CURRICULUM] installed trained table to q_table.json", flush=True)
+            print(f"[CURRICULUM] backed up previous active Q-table to {backup}", flush=True)
+        print("[CURRICULUM] installed trained table to artifacts/models/active/q_table.json", flush=True)
 
     print(f"[CURRICULUM] artifacts: {run_dir}", flush=True)
 

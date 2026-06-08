@@ -137,7 +137,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--window-size", type=int, default=8)
     parser.add_argument("--max-window", type=int, default=80)
     parser.add_argument("--rto", type=float, default=0.20)
-    parser.add_argument("--dqn-model", default="dqn_model.pt")
+    parser.add_argument("--dqn-model", default="artifacts/models/active/dqn_model.pt")
     parser.add_argument("--dqn-lr", type=float, default=0.001)
     parser.add_argument("--dqn-batch-size", type=int, default=16)
     parser.add_argument("--dqn-replay-capacity", type=int, default=1024)

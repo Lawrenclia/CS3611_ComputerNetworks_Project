@@ -16,7 +16,7 @@ from pathlib import Path
 from protocol import PAYLOAD_SIZE, build_payload, pack_data_packet, unpack_ack
 from virtual_link import VirtualFunnelLink
 
-Q_LEGACY_STATE_NAMES = (
+Q_STATE_NAMES = (
     "rtt_up|no_loss",
     "rtt_up|loss",
     "rtt_down|no_loss",
@@ -24,14 +24,11 @@ Q_LEGACY_STATE_NAMES = (
     "rtt_stable|no_loss",
     "rtt_stable|loss",
 )
-Q_TREND_NAMES = ("rtt_up", "rtt_down", "rtt_stable")
-Q_LOSS_NAMES = ("no_loss", "loss")
-Q_CWND_BUCKETS = ("cwnd_low", "cwnd_mid", "cwnd_high")
-Q_STATE_NAMES = tuple(
-    f"{trend}|{loss}|{bucket}"
-    for trend in Q_TREND_NAMES
-    for loss in Q_LOSS_NAMES
-    for bucket in Q_CWND_BUCKETS
+Q_EXPANDED_CWND_BUCKETS = ("cwnd_low", "cwnd_mid", "cwnd_high")
+Q_EXPANDED_STATE_NAMES = tuple(
+    f"{state}|{bucket}"
+    for state in Q_STATE_NAMES
+    for bucket in Q_EXPANDED_CWND_BUCKETS
 )
 Q_ACTION_KEYS = ("0", "1", "2")
 Q_ACTION_NAMES = ("hold", "cwnd+1", "cwnd/2")
@@ -142,7 +139,7 @@ class CongestionController:
             return None
 
         state = self._state_from_interval(srtt)
-        reward = self._qlearning_reward()
+        reward = self._reward()
         old = self.q_table[self.last_state][self.last_action]
         best_next = max(self.q_table[state])
         self.q_table[self.last_state][self.last_action] = old + self.alpha * (
@@ -167,7 +164,7 @@ class CongestionController:
             self.qtable_file.parent.mkdir(parents=True, exist_ok=True)
             data = {
                 "metadata": {
-                    "state_features": ["rtt_trend", "loss_flag", "cwnd_bucket"],
+                    "state_features": ["rtt_trend", "loss_flag"],
                     "state_count": len(Q_STATE_NAMES),
                     "actions": {
                         action_key: action_name
@@ -189,11 +186,10 @@ class CongestionController:
                 print(f"[SENDER][QLEARN] failed to save q-table to {self.qtable_file}: {exc}", flush=True)
 
     def _choose_action(self, state: int) -> int:
-        allowed_actions = self._allowed_q_actions(state)
         if random.random() < self.epsilon:
-            return random.choice(allowed_actions)
+            return random.randrange(len(Q_ACTION_KEYS))
         row = self.q_table[state]
-        return max(allowed_actions, key=lambda i: row[i])
+        return max(range(len(Q_ACTION_KEYS)), key=lambda i: row[i])
 
     def _apply_action(self, action: int) -> None:
         if action == 1:
@@ -214,71 +210,21 @@ class CongestionController:
             else:
                 trend = 2
         loss_flag = 1 if self.interval_retransmissions > 0 else 0
-        bucket = self._cwnd_bucket()
-        return (
-            trend * len(Q_LOSS_NAMES) * len(Q_CWND_BUCKETS)
-            + loss_flag * len(Q_CWND_BUCKETS)
-            + bucket
-        )
+        return trend * 2 + loss_flag
 
     def _reward(self) -> float:
-        reward, _avg_rtt_ms = self._base_reward()
-        return reward
-
-    def _base_reward(self) -> tuple[float, float]:
         avg_rtt = (
             self.interval_rtt_sum / self.interval_rtt_count
             if self.interval_rtt_count
             else 0.0
         )
         avg_rtt_ms = avg_rtt * 1000.0
-        reward = (
+        return (
             self.reward_throughput_weight * self.interval_acked
             - self.reward_timeout_weight * self.interval_timeouts
             - self.reward_retx_weight * self.interval_retransmissions
             - self.reward_rtt_weight * avg_rtt_ms
         )
-        return reward, avg_rtt_ms
-
-    def _qlearning_reward(self) -> float:
-        reward, avg_rtt_ms = self._base_reward()
-        state_name = Q_STATE_NAMES[self.last_state]
-        no_loss_state = "|no_loss|" in state_name
-        low_cwnd = state_name.endswith("|cwnd_low")
-        mid_cwnd = state_name.endswith("|cwnd_mid")
-        clean_interval = self.interval_retransmissions == 0 and self.interval_timeouts == 0
-
-        if no_loss_state and clean_interval:
-            if low_cwnd:
-                if self.last_action == 1:
-                    reward += 1.5
-                elif self.last_action == 0:
-                    reward += 0.2
-                elif self.last_action == 2:
-                    reward -= 3.0
-            elif mid_cwnd and avg_rtt_ms < 80.0:
-                if self.last_action == 1:
-                    reward += 0.6
-                elif self.last_action == 2:
-                    reward -= 0.8
-
-        if "|loss|" in state_name and self.last_action == 1:
-            reward -= 1.0
-        return reward
-
-    def _cwnd_bucket(self) -> int:
-        ratio = self.cwnd / self.max_cwnd if self.max_cwnd > 0 else 0.0
-        if self.cwnd <= 4.0 or ratio <= 0.15:
-            return 0
-        if ratio <= 0.55:
-            return 1
-        return 2
-
-    def _allowed_q_actions(self, state: int) -> tuple[int, ...]:
-        state_name = Q_STATE_NAMES[state]
-        if "|no_loss|" in state_name and state_name.endswith("|cwnd_low"):
-            return (0, 1)
-        return (0, 1, 2)
 
     def _step_dqn(self, srtt: float | None) -> tuple[str, object, float, str]:
         state = self._continuous_state(srtt)
@@ -466,8 +412,8 @@ class CongestionController:
                 return None
             if len(parsed_rows) == len(Q_STATE_NAMES):
                 return parsed_rows
-            if len(parsed_rows) == len(Q_LEGACY_STATE_NAMES):
-                return self._expand_legacy_q_rows(parsed_rows)
+            if len(parsed_rows) == len(Q_EXPANDED_STATE_NAMES):
+                return self._collapse_expanded_q_rows(parsed_rows)
 
         parsed_rows = []
         for state_name in Q_STATE_NAMES:
@@ -484,18 +430,18 @@ class CongestionController:
         if parsed_rows:
             return parsed_rows
 
-        legacy_rows = []
-        for state_name in Q_LEGACY_STATE_NAMES:
+        expanded_rows = []
+        for state_name in Q_EXPANDED_STATE_NAMES:
             state_values = data.get(state_name)
             if not isinstance(state_values, dict):
                 return None
-            legacy_rows.append(
+            expanded_rows.append(
                 [
                     float(state_values.get(action_key, 0.0))
                     for action_key in Q_ACTION_KEYS
                 ]
             )
-        return self._expand_legacy_q_rows(legacy_rows)
+        return self._collapse_expanded_q_rows(expanded_rows)
 
     def _parse_q_rows(self, rows: list[object]) -> list[list[float]] | None:
         parsed_rows = []
@@ -505,24 +451,18 @@ class CongestionController:
             parsed_rows.append([float(value) for value in row])
         return parsed_rows
 
-    def _expand_legacy_q_rows(self, legacy_rows: list[list[float]]) -> list[list[float]]:
-        legacy_by_name = {
-            state_name: legacy_rows[state_index]
-            for state_index, state_name in enumerate(Q_LEGACY_STATE_NAMES)
-        }
+    def _collapse_expanded_q_rows(self, expanded_rows: list[list[float]]) -> list[list[float]]:
         rows = []
-        for state_name in Q_STATE_NAMES:
-            trend, loss_flag, bucket = state_name.split("|")
-            row = list(legacy_by_name[f"{trend}|{loss_flag}"])
-            if loss_flag == "no_loss" and bucket == "cwnd_low":
-                row[1] = max(row[1], row[0] + 0.5, row[2] + 1.5)
-                row[2] = min(row[2], row[1] - 2.0)
-            elif loss_flag == "no_loss" and bucket == "cwnd_mid":
-                row[1] = max(row[1], row[2] + 0.5)
-                row[2] = min(row[2], row[1] - 0.5)
-            elif loss_flag == "loss":
-                row[1] = min(row[1], row[2] - 1.0)
-            rows.append(row)
+        bucket_count = len(Q_EXPANDED_CWND_BUCKETS)
+        for state_index in range(len(Q_STATE_NAMES)):
+            start = state_index * bucket_count
+            bucket_rows = expanded_rows[start : start + bucket_count]
+            rows.append(
+                [
+                    sum(row[action_index] for row in bucket_rows) / bucket_count
+                    for action_index in range(len(Q_ACTION_KEYS))
+                ]
+            )
         return rows
 
 
@@ -552,8 +492,8 @@ class ReliableSender:
         reward_rtt_weight: float = 0.015,
         reward_timeout_weight: float = 10.0,
         reward_retx_weight: float = 2.0,
-        qtable_file: str | None = "q_table.json",
-        dqn_model_file: str | None = "dqn_model.pt",
+        qtable_file: str | None = "artifacts/models/active/q_table.json",
+        dqn_model_file: str | None = "artifacts/models/active/dqn_model.pt",
         dqn_lr: float = 0.001,
         dqn_batch_size: int = 16,
         dqn_replay_capacity: int = 1024,
@@ -1045,8 +985,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.015,
         help="reward penalty per millisecond of average RTT",
     )
-    parser.add_argument("--qtable-file", "--q-table", dest="qtable_file", default="q_table.json")
-    parser.add_argument("--dqn-model-file", default="dqn_model.pt")
+    parser.add_argument("--qtable-file", "--q-table", dest="qtable_file", default="artifacts/models/active/q_table.json")
+    parser.add_argument("--dqn-model-file", default="artifacts/models/active/dqn_model.pt")
     parser.add_argument("--dqn-lr", type=float, default=0.001)
     parser.add_argument("--dqn-batch-size", type=int, default=16)
     parser.add_argument("--dqn-replay-capacity", type=int, default=1024)

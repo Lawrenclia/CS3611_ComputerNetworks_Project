@@ -36,7 +36,46 @@ def read_latest_history(path: Path) -> dict[str, list[dict[str, str]]]:
     return grouped
 
 
-def plot(metrics: list[dict[str, str]], histories: dict[str, list[dict[str, str]]], output: Path) -> None:
+def moving_average(values: list[float], window: int) -> list[float]:
+    if window <= 1 or len(values) <= 2:
+        return values[:]
+    half_window = window // 2
+    smoothed: list[float] = []
+    for index in range(len(values)):
+        start = max(0, index - half_window)
+        end = min(len(values), index + half_window + 1)
+        smoothed.append(sum(values[start:end]) / (end - start))
+    return smoothed
+
+
+def should_smooth_cwnd(mode: str, smooth_window: int, points: int) -> bool:
+    normalized = mode.lower().replace("-", "").replace("_", "").replace(" ", "")
+    return smooth_window > 1 and points >= 3 and "qlearning" in normalized
+
+
+def plot_cwnd_histories(axis, histories: dict[str, list[dict[str, str]]], smooth_window: int) -> None:
+    for mode, rows in histories.items():
+        times = [float(row["time_s"]) for row in rows]
+        cwnds = [float(row["cwnd"]) for row in rows]
+        if should_smooth_cwnd(mode, smooth_window, len(cwnds)):
+            line = axis.plot(times, cwnds, label=f"{mode} raw", linewidth=1.1, alpha=0.35)[0]
+            axis.plot(
+                times,
+                moving_average(cwnds, smooth_window),
+                label=f"{mode} moving avg",
+                linewidth=2.2,
+                color=line.get_color(),
+            )
+        else:
+            axis.plot(times, cwnds, label=mode, linewidth=1.8)
+
+
+def plot(
+    metrics: list[dict[str, str]],
+    histories: dict[str, list[dict[str, str]]],
+    output: Path,
+    smooth_window: int,
+) -> None:
     try:
         import matplotlib.pyplot as plt
     except ImportError as exc:
@@ -53,10 +92,7 @@ def plot(metrics: list[dict[str, str]], histories: dict[str, list[dict[str, str]
     avg_rtt = [float(row["avg_rtt_ms"]) for row in metrics]
 
     fig, axes = plt.subplots(2, 1, figsize=(11, 8), constrained_layout=True)
-    for mode, rows in histories.items():
-        times = [float(row["time_s"]) for row in rows]
-        cwnds = [float(row["cwnd"]) for row in rows]
-        axes[0].plot(times, cwnds, label=mode, linewidth=1.8)
+    plot_cwnd_histories(axes[0], histories, smooth_window)
     axes[0].set_title("CWND over time")
     axes[0].set_xlabel("Time (s)")
     axes[0].set_ylabel("CWND (packets)")
@@ -102,10 +138,7 @@ def plot(metrics: list[dict[str, str]], histories: dict[str, list[dict[str, str]
 
     cwnd_output = output.with_name(f"{output.stem}_cwnd{output.suffix}")
     fig, axis = plt.subplots(figsize=(11, 4.5), constrained_layout=True)
-    for mode, rows in histories.items():
-        times = [float(row["time_s"]) for row in rows]
-        cwnds = [float(row["cwnd"]) for row in rows]
-        axis.plot(times, cwnds, label=mode, linewidth=1.8)
+    plot_cwnd_histories(axis, histories, smooth_window)
     axis.set_title("CWND over time")
     axis.set_xlabel("Time (s)")
     axis.set_ylabel("CWND (packets)")
@@ -155,11 +188,17 @@ def main() -> None:
     parser.add_argument("--metrics-file", default="artifacts/metrics/metrics.csv")
     parser.add_argument("--history-file", default="artifacts/metrics/history.csv")
     parser.add_argument("--output", default="artifacts/plots/comparison.png")
+    parser.add_argument(
+        "--smooth-window",
+        type=int,
+        default=5,
+        help="moving-average window for Q-Learning CWND curves; use 1 to disable",
+    )
     args = parser.parse_args()
 
     metrics = read_latest_metrics(Path(args.metrics_file))
     histories = read_latest_history(Path(args.history_file))
-    plot(metrics, histories, Path(args.output))
+    plot(metrics, histories, Path(args.output), max(1, args.smooth_window))
 
 
 if __name__ == "__main__":

@@ -28,9 +28,9 @@ for ((i=0; i<ROUNDS; i++)); do
         --max-cwnd 32 \
         --epsilon $EPSILON \
         --rto 0.2 \
-        --qtable-file "$ROOT/q_table.json" \
-        --metrics-file "$ROOT/metrics.csv" \
-        --history-file "$ROOT/history.csv" \
+        --qtable-file "$ROOT/artifacts/models/active/q_table.json" \
+        --metrics-file "$ROOT/artifacts/training/qlearning_metrics.csv" \
+        --history-file "$ROOT/artifacts/training/qlearning_history.csv" \
         --quiet
     if [ $? -ne 0 ]; then
         echo "[LOOP] Round $((i+1)) FAILED!"
