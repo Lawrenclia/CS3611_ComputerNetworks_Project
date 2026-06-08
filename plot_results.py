@@ -1,5 +1,6 @@
 import re
 import argparse
+from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -31,8 +32,11 @@ def main():
     parser = argparse.ArgumentParser(description="Visualize Performance")
     parser.add_argument("--log1", default="tx1.log", help="AIMD/Reno baseline log file")
     parser.add_argument("--log2", default="tx2.log", help="Q-Learning log file")
+    parser.add_argument("--output-dir", default="artifacts/plots", help="Directory for generated figures")
     
     args = parser.parse_args()
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     
     cwnds1, thr1, rtt1 = parse_log(args.log1)
     cwnds2, thr2, rtt2 = parse_log(args.log2)
@@ -47,8 +51,9 @@ def main():
     plt.legend()
     plt.grid(True, linestyle=':', alpha=0.6)
     plt.tight_layout()
-    plt.savefig('cwnd_comparison.png', dpi=300)
-    print("Saved CWND plot to cwnd_comparison.png")
+    cwnd_output = output_dir / "cwnd_comparison.png"
+    plt.savefig(cwnd_output, dpi=300)
+    print(f"Saved CWND plot to {cwnd_output}")
 
     # 2. 绘制吞吐量与平均延迟柱状图
     fig, ax1 = plt.subplots(figsize=(8, 5))
@@ -88,8 +93,9 @@ def main():
                     xytext=(0, 3), textcoords="offset points", ha='center', va='bottom')
 
     plt.tight_layout()
-    plt.savefig('throughput_rtt_comparison.png', dpi=300)
-    print("Saved bar chart plot to throughput_rtt_comparison.png")
+    bars_output = output_dir / "throughput_rtt_comparison.png"
+    plt.savefig(bars_output, dpi=300)
+    print(f"Saved bar chart plot to {bars_output}")
 
 if __name__ == '__main__':
     main()

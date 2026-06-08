@@ -16,13 +16,22 @@ from pathlib import Path
 from protocol import PAYLOAD_SIZE, build_payload, pack_data_packet, unpack_ack
 from virtual_link import VirtualFunnelLink
 
-Q_STATE_NAMES = (
+Q_LEGACY_STATE_NAMES = (
     "rtt_up|no_loss",
     "rtt_up|loss",
     "rtt_down|no_loss",
     "rtt_down|loss",
     "rtt_stable|no_loss",
     "rtt_stable|loss",
+)
+Q_TREND_NAMES = ("rtt_up", "rtt_down", "rtt_stable")
+Q_LOSS_NAMES = ("no_loss", "loss")
+Q_CWND_BUCKETS = ("cwnd_low", "cwnd_mid", "cwnd_high")
+Q_STATE_NAMES = tuple(
+    f"{trend}|{loss}|{bucket}"
+    for trend in Q_TREND_NAMES
+    for loss in Q_LOSS_NAMES
+    for bucket in Q_CWND_BUCKETS
 )
 Q_ACTION_KEYS = ("0", "1", "2")
 Q_ACTION_NAMES = ("hold", "cwnd+1", "cwnd/2")
@@ -46,6 +55,10 @@ class CongestionController:
         epsilon: float,
         alpha: float,
         gamma: float,
+        reward_throughput_weight: float,
+        reward_rtt_weight: float,
+        reward_timeout_weight: float,
+        reward_retx_weight: float,
         qtable_file: str | None,
         dqn_model_file: str | None,
         dqn_lr: float,
@@ -60,6 +73,10 @@ class CongestionController:
         self.epsilon = epsilon
         self.alpha = alpha
         self.gamma = gamma
+        self.reward_throughput_weight = reward_throughput_weight
+        self.reward_rtt_weight = reward_rtt_weight
+        self.reward_timeout_weight = reward_timeout_weight
+        self.reward_retx_weight = reward_retx_weight
         self.qtable_file = Path(qtable_file) if qtable_file else None
         self.dqn_model_file = Path(dqn_model_file) if dqn_model_file else None
         self.dqn_lr = dqn_lr
@@ -68,12 +85,15 @@ class CongestionController:
         self.dqn_target_update = dqn_target_update
         self.verbose = verbose
 
-        self.q_table = [[0.0, 0.0, 0.0] for _ in range(6)]
+        self.q_table = [[0.0, 0.0, 0.0] for _ in Q_STATE_NAMES]
         self.last_state = 0
         self.last_action = 0
         self.last_srtt = None
         self.interval_acked = 0
         self.interval_losses = 0
+        self.interval_retransmissions = 0
+        self.interval_timeouts = 0
+        self.interval_fast_retransmissions = 0
         self.interval_rtt_sum = 0.0
         self.interval_rtt_count = 0
         self._load_q_table()
@@ -104,8 +124,13 @@ class CongestionController:
         if self.mode == "aimd":
             self.cwnd = min(self.max_cwnd, self.cwnd + newly_acked / self.cwnd)
 
-    def on_loss(self) -> None:
+    def on_loss(self, reason: str = "RTO") -> None:
         self.interval_losses += 1
+        self.interval_retransmissions += 1
+        if reason == "RTO":
+            self.interval_timeouts += 1
+        elif reason == "FAST":
+            self.interval_fast_retransmissions += 1
         if self.mode == "aimd":
             self.cwnd = max(1.0, self.cwnd / 2.0)
 
@@ -117,7 +142,7 @@ class CongestionController:
             return None
 
         state = self._state_from_interval(srtt)
-        reward = self._reward()
+        reward = self._qlearning_reward()
         old = self.q_table[self.last_state][self.last_action]
         best_next = max(self.q_table[state])
         self.q_table[self.last_state][self.last_action] = old + self.alpha * (
@@ -141,12 +166,20 @@ class CongestionController:
         try:
             self.qtable_file.parent.mkdir(parents=True, exist_ok=True)
             data = {
-                state_name: {
+                "metadata": {
+                    "state_features": ["rtt_trend", "loss_flag", "cwnd_bucket"],
+                    "state_count": len(Q_STATE_NAMES),
+                    "actions": {
+                        action_key: action_name
+                        for action_key, action_name in zip(Q_ACTION_KEYS, Q_ACTION_NAMES)
+                    },
+                }
+            }
+            for state_index, state_name in enumerate(Q_STATE_NAMES):
+                data[state_name] = {
                     action_key: self.q_table[state_index][action_index]
                     for action_index, action_key in enumerate(Q_ACTION_KEYS)
                 }
-                for state_index, state_name in enumerate(Q_STATE_NAMES)
-            }
             self.qtable_file.write_text(
                 json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True),
                 encoding="utf-8",
@@ -156,10 +189,11 @@ class CongestionController:
                 print(f"[SENDER][QLEARN] failed to save q-table to {self.qtable_file}: {exc}", flush=True)
 
     def _choose_action(self, state: int) -> int:
+        allowed_actions = self._allowed_q_actions(state)
         if random.random() < self.epsilon:
-            return random.randrange(3)
+            return random.choice(allowed_actions)
         row = self.q_table[state]
-        return max(range(3), key=lambda i: row[i])
+        return max(allowed_actions, key=lambda i: row[i])
 
     def _apply_action(self, action: int) -> None:
         if action == 1:
@@ -179,16 +213,72 @@ class CongestionController:
                 trend = 1
             else:
                 trend = 2
-        loss_flag = 1 if self.interval_losses > 0 else 0
-        return trend * 2 + loss_flag
+        loss_flag = 1 if self.interval_retransmissions > 0 else 0
+        bucket = self._cwnd_bucket()
+        return (
+            trend * len(Q_LOSS_NAMES) * len(Q_CWND_BUCKETS)
+            + loss_flag * len(Q_CWND_BUCKETS)
+            + bucket
+        )
 
     def _reward(self) -> float:
+        reward, _avg_rtt_ms = self._base_reward()
+        return reward
+
+    def _base_reward(self) -> tuple[float, float]:
         avg_rtt = (
             self.interval_rtt_sum / self.interval_rtt_count
             if self.interval_rtt_count
             else 0.0
         )
-        return self.interval_acked - 20.0 * avg_rtt - 2.0 * self.interval_losses
+        avg_rtt_ms = avg_rtt * 1000.0
+        reward = (
+            self.reward_throughput_weight * self.interval_acked
+            - self.reward_timeout_weight * self.interval_timeouts
+            - self.reward_retx_weight * self.interval_retransmissions
+            - self.reward_rtt_weight * avg_rtt_ms
+        )
+        return reward, avg_rtt_ms
+
+    def _qlearning_reward(self) -> float:
+        reward, avg_rtt_ms = self._base_reward()
+        state_name = Q_STATE_NAMES[self.last_state]
+        no_loss_state = "|no_loss|" in state_name
+        low_cwnd = state_name.endswith("|cwnd_low")
+        mid_cwnd = state_name.endswith("|cwnd_mid")
+        clean_interval = self.interval_retransmissions == 0 and self.interval_timeouts == 0
+
+        if no_loss_state and clean_interval:
+            if low_cwnd:
+                if self.last_action == 1:
+                    reward += 1.5
+                elif self.last_action == 0:
+                    reward += 0.2
+                elif self.last_action == 2:
+                    reward -= 3.0
+            elif mid_cwnd and avg_rtt_ms < 80.0:
+                if self.last_action == 1:
+                    reward += 0.6
+                elif self.last_action == 2:
+                    reward -= 0.8
+
+        if "|loss|" in state_name and self.last_action == 1:
+            reward -= 1.0
+        return reward
+
+    def _cwnd_bucket(self) -> int:
+        ratio = self.cwnd / self.max_cwnd if self.max_cwnd > 0 else 0.0
+        if self.cwnd <= 4.0 or ratio <= 0.15:
+            return 0
+        if ratio <= 0.55:
+            return 1
+        return 2
+
+    def _allowed_q_actions(self, state: int) -> tuple[int, ...]:
+        state_name = Q_STATE_NAMES[state]
+        if "|no_loss|" in state_name and state_name.endswith("|cwnd_low"):
+            return (0, 1)
+        return (0, 1, 2)
 
     def _step_dqn(self, srtt: float | None) -> tuple[str, object, float, str]:
         state = self._continuous_state(srtt)
@@ -347,6 +437,9 @@ class CongestionController:
     def _reset_interval(self) -> None:
         self.interval_acked = 0
         self.interval_losses = 0
+        self.interval_retransmissions = 0
+        self.interval_timeouts = 0
+        self.interval_fast_retransmissions = 0
         self.interval_rtt_sum = 0.0
         self.interval_rtt_count = 0
 
@@ -367,26 +460,70 @@ class CongestionController:
             return None
 
         rows = data.get("q_table")
-        if isinstance(rows, list) and len(rows) == len(Q_STATE_NAMES):
-            parsed_rows = []
-            for row in rows:
-                if not isinstance(row, list) or len(row) != len(Q_ACTION_KEYS):
-                    return None
-                parsed_rows.append([float(value) for value in row])
-            return parsed_rows
+        if isinstance(rows, list):
+            parsed_rows = self._parse_q_rows(rows)
+            if parsed_rows is None:
+                return None
+            if len(parsed_rows) == len(Q_STATE_NAMES):
+                return parsed_rows
+            if len(parsed_rows) == len(Q_LEGACY_STATE_NAMES):
+                return self._expand_legacy_q_rows(parsed_rows)
 
         parsed_rows = []
         for state_name in Q_STATE_NAMES:
             state_values = data.get(state_name)
             if not isinstance(state_values, dict):
-                return None
+                parsed_rows = []
+                break
             parsed_rows.append(
                 [
                     float(state_values.get(action_key, 0.0))
                     for action_key in Q_ACTION_KEYS
                 ]
             )
+        if parsed_rows:
+            return parsed_rows
+
+        legacy_rows = []
+        for state_name in Q_LEGACY_STATE_NAMES:
+            state_values = data.get(state_name)
+            if not isinstance(state_values, dict):
+                return None
+            legacy_rows.append(
+                [
+                    float(state_values.get(action_key, 0.0))
+                    for action_key in Q_ACTION_KEYS
+                ]
+            )
+        return self._expand_legacy_q_rows(legacy_rows)
+
+    def _parse_q_rows(self, rows: list[object]) -> list[list[float]] | None:
+        parsed_rows = []
+        for row in rows:
+            if not isinstance(row, list) or len(row) != len(Q_ACTION_KEYS):
+                return None
+            parsed_rows.append([float(value) for value in row])
         return parsed_rows
+
+    def _expand_legacy_q_rows(self, legacy_rows: list[list[float]]) -> list[list[float]]:
+        legacy_by_name = {
+            state_name: legacy_rows[state_index]
+            for state_index, state_name in enumerate(Q_LEGACY_STATE_NAMES)
+        }
+        rows = []
+        for state_name in Q_STATE_NAMES:
+            trend, loss_flag, bucket = state_name.split("|")
+            row = list(legacy_by_name[f"{trend}|{loss_flag}"])
+            if loss_flag == "no_loss" and bucket == "cwnd_low":
+                row[1] = max(row[1], row[0] + 0.5, row[2] + 1.5)
+                row[2] = min(row[2], row[1] - 2.0)
+            elif loss_flag == "no_loss" and bucket == "cwnd_mid":
+                row[1] = max(row[1], row[2] + 0.5)
+                row[2] = min(row[2], row[1] - 0.5)
+            elif loss_flag == "loss":
+                row[1] = min(row[1], row[2] - 1.0)
+            rows.append(row)
+        return rows
 
 
 class ReliableSender:
@@ -411,6 +548,10 @@ class ReliableSender:
         epsilon: float = 0.10,
         q_alpha: float = 0.30,
         q_gamma: float = 0.85,
+        reward_throughput_weight: float = 1.0,
+        reward_rtt_weight: float = 0.015,
+        reward_timeout_weight: float = 10.0,
+        reward_retx_weight: float = 2.0,
         qtable_file: str | None = "q_table.json",
         dqn_model_file: str | None = "dqn_model.pt",
         dqn_lr: float = 0.001,
@@ -457,6 +598,10 @@ class ReliableSender:
             epsilon=epsilon,
             alpha=q_alpha,
             gamma=q_gamma,
+            reward_throughput_weight=reward_throughput_weight,
+            reward_rtt_weight=reward_rtt_weight,
+            reward_timeout_weight=reward_timeout_weight,
+            reward_retx_weight=reward_retx_weight,
             qtable_file=qtable_file,
             dqn_model_file=dqn_model_file,
             dqn_lr=dqn_lr,
@@ -597,7 +742,7 @@ class ReliableSender:
         state.wire_timestamp = timestamp
         state.transmissions += 1
         self.retransmissions += 1
-        self.controller.on_loss()
+        self.controller.on_loss(reason=reason)
         if reason == "FAST":
             self.fast_retransmissions += 1
         self._log(
@@ -872,14 +1017,42 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epsilon", "--q-epsilon", dest="epsilon", type=float, default=0.10)
     parser.add_argument("--q-alpha", type=float, default=0.30)
     parser.add_argument("--q-gamma", type=float, default=0.85)
+    parser.add_argument(
+        "--reward-throughput-weight",
+        "--reward-ack-weight",
+        dest="reward_throughput_weight",
+        type=float,
+        default=1.0,
+        help="reward weight for packets ACKed in one control interval",
+    )
+    parser.add_argument(
+        "--reward-timeout-weight",
+        type=float,
+        default=10.0,
+        help="reward penalty per RTO timeout event",
+    )
+    parser.add_argument(
+        "--reward-retx-weight",
+        "--reward-loss-weight",
+        dest="reward_retx_weight",
+        type=float,
+        default=2.0,
+        help="reward penalty per retransmission event",
+    )
+    parser.add_argument(
+        "--reward-rtt-weight",
+        type=float,
+        default=0.015,
+        help="reward penalty per millisecond of average RTT",
+    )
     parser.add_argument("--qtable-file", "--q-table", dest="qtable_file", default="q_table.json")
     parser.add_argument("--dqn-model-file", default="dqn_model.pt")
     parser.add_argument("--dqn-lr", type=float, default=0.001)
     parser.add_argument("--dqn-batch-size", type=int, default=16)
     parser.add_argument("--dqn-replay-capacity", type=int, default=1024)
     parser.add_argument("--dqn-target-update", type=int, default=10)
-    parser.add_argument("--metrics-file", default="metrics.csv")
-    parser.add_argument("--history-file", default="history.csv")
+    parser.add_argument("--metrics-file", default="artifacts/metrics/metrics.csv")
+    parser.add_argument("--history-file", default="artifacts/metrics/history.csv")
     parser.add_argument("--plot-file", default=None)
     parser.add_argument("--rto", type=float, default=0.20)
     parser.add_argument("--link-queue-capacity", type=int, default=20)
@@ -892,6 +1065,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reward-alpha", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--reward-beta", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--reward-gamma", type=float, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--reward-delta", type=float, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--reward-queue-weight", type=float, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--reward-target-rtt-ms", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--quiet", action="store_true")
     return parser
 
@@ -918,6 +1094,22 @@ def main() -> None:
         raise SystemExit("--q-alpha must be in (0, 1]")
     if not 0 <= args.q_gamma <= 1:
         raise SystemExit("--q-gamma must be between 0 and 1")
+    if args.reward_alpha is not None:
+        args.reward_throughput_weight = args.reward_alpha
+    if args.reward_beta is not None:
+        args.reward_timeout_weight = args.reward_beta
+    if args.reward_gamma is not None:
+        args.reward_retx_weight = args.reward_gamma
+    if args.reward_delta is not None:
+        args.reward_rtt_weight = args.reward_delta
+    if args.reward_throughput_weight < 0:
+        raise SystemExit("--reward-throughput-weight must be non-negative")
+    if args.reward_timeout_weight < 0:
+        raise SystemExit("--reward-timeout-weight must be non-negative")
+    if args.reward_retx_weight < 0:
+        raise SystemExit("--reward-retx-weight must be non-negative")
+    if args.reward_rtt_weight < 0:
+        raise SystemExit("--reward-rtt-weight must be non-negative")
     if args.dqn_lr <= 0:
         raise SystemExit("--dqn-lr must be positive")
     if args.dqn_batch_size <= 0:
@@ -957,6 +1149,10 @@ def main() -> None:
         epsilon=args.epsilon,
         q_alpha=args.q_alpha,
         q_gamma=args.q_gamma,
+        reward_throughput_weight=args.reward_throughput_weight,
+        reward_rtt_weight=args.reward_rtt_weight,
+        reward_timeout_weight=args.reward_timeout_weight,
+        reward_retx_weight=args.reward_retx_weight,
         qtable_file=args.qtable_file,
         dqn_model_file=args.dqn_model_file,
         dqn_lr=args.dqn_lr,

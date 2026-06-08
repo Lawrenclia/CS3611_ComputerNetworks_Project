@@ -17,3 +17,20 @@ env/
 
 # macOS
 .DS_Store
+
+# Demo output
+demo_results/
+
+# Generated experiment artifacts
+artifacts/metrics/
+artifacts/training/
+artifacts/plots/
+artifacts/checkpoints/
+artifacts/demo_results/
+artifacts/legacy/
+
+# Generated presentation and report workspaces
+outputs/
+report/build/
+report/render/
+report/results/
