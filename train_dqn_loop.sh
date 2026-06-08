@@ -8,16 +8,17 @@ EPSILON_DECAY=0.96
 MIN_EPSILON=0.05
 
 echo "[LOOP] Starting receiver on port $PORT..."
-python "$ROOT/receiver.py" --port $PORT --initial-seq 0 &
+python3 "$ROOT/receiver.py" --port $PORT --initial-seq 0 &
 RECEIVER_PID=$!
+trap 'kill $RECEIVER_PID 2>/dev/null; wait $RECEIVER_PID 2>/dev/null' EXIT INT TERM
 sleep 1
 
 echo "[LOOP] Starting $ROUNDS rounds of DQN training..."
 for ((i=0; i<ROUNDS; i++)); do
-    EPSILON=$(python -c "print(max($MIN_EPSILON, $INIT_EPSILON * ($EPSILON_DECAY ** $i)))")
+    EPSILON=$(python3 -c "print(max($MIN_EPSILON, $INIT_EPSILON * ($EPSILON_DECAY ** $i)))")
     START_SEQ=$((i * PACKETS))
     echo "[LOOP] Round $((i+1))/$ROUNDS start_seq=$START_SEQ epsilon=$EPSILON"
-    python "$ROOT/sender.py" \
+    python3 "$ROOT/sender.py" \
         --target-port $PORT \
         --packets $PACKETS \
         --start-seq $START_SEQ \
