@@ -1,4 +1,6 @@
 """Run Q-Learning 100 rounds + DQN 100 rounds sequentially."""
+from __future__ import annotations
+
 import subprocess
 import sys
 from pathlib import Path
