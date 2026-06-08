@@ -35,7 +35,9 @@ for ((i=0; i<ROUNDS; i++)); do
         --quiet
     if [ $? -ne 0 ]; then
         echo "[LOOP] Round $((i+1)) FAILED!"
-        break
+        kill $RECEIVER_PID 2>/dev/null
+        wait $RECEIVER_PID 2>/dev/null
+        exit 1
     fi
 done
 
