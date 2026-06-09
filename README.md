@@ -256,7 +256,7 @@ python3 sender.py --disable-virtual-link
 8. `receiver.py` 维护 `expected_seq`，按序推进累计确认号，乱序分组暂存在缓存集合中。
 9. AIMD 模式在收到 ACK 时执行 `CWND += 1 / CWND`，发生 RTO 或快速重传时执行 `CWND = max(1, CWND / 2)`。
 10. Q-Learning 模式用 `RTT 趋势 × 是否重传` 形成 6 个状态，每个控制周期用吞吐、timeout、重传和 RTT 计算奖励并更新 Q-Table。
-11. DQN 模式废弃离散 Q-Table，使用 PyTorch 构建三层全连接网络；输入为连续浮点状态 `[RTT(ms), RTT趋势%, loss%, timeout%, CWND, ACK利用率]`，输出 5 个动作的 Q 值，动作分别对应 `CWND × 0.50 / 0.85 / 1.00 / 1.35 / 1.75`。当动作大于 1 时，低窗口下至少执行 `CWND + 1`，避免模型长期卡在 `CWND=1`。
+11. DQN 模式废弃离散 Q-Table，使用 PyTorch 构建三层全连接网络；输入为连续浮点状态 `[RTT(ms), RTT趋势%, loss%, timeout%, CWND, ACK利用率]`，输出 5 个动作的 Q 值，动作分别对应 `CWND × 0.70 / 0.90 / 1.00 / 1.10 / 1.25`。增窗动作每个控制周期最多增加 1 个窗口单位，避免随机探索时快速打爆虚拟队列。
 
 ## DQN 深度强化学习模式
 
@@ -288,7 +288,9 @@ python3 sender.py \
 python3 train_dqn.py \
   --reset-dqn-model \
   --rounds 100 \
-  --packets 240 \
+  --packets 160 \
+  --window-size 4 \
+  --max-window 40 \
   --dqn-model artifacts/models/active/dqn_model.pt \
   --checkpoint-dir artifacts/checkpoints/dqn \
   --summary-file artifacts/training/dqn_summary.csv
@@ -304,13 +306,13 @@ python3 train_dqn.py --fast
 
 DQN 的 `--fast` 会把默认包数降到 80、Receiver delay 降到 5 ms、虚拟链路服务间隔降到 2 ms，并使用较小 batch/replay 设置，适合先看训练方向是否正常；正式对比再改回默认或手动指定更大的 `--packets`。
 
-当前 DQN 训练默认更鼓励吞吐恢复：`--reward-throughput-weight 2.4`、`--reward-timeout-weight 7.0`、`--reward-retx-weight 1.2`、`--reward-rtt-weight 0.006`。这样仍然惩罚 timeout 和重传，但不会因为 RTT 惩罚过强而学成长期低窗口策略。
+当前 DQN 训练默认走保守 curriculum：`--epsilon 0.20`、`--window-size 4`、`--max-window 40`、`--reward-throughput-weight 1.8`、`--reward-timeout-weight 18.0`、`--reward-retx-weight 3.0`、`--reward-rtt-weight 0.004`。这样先压住 timeout storm，再逐步观察吞吐是否恢复。脚本还会检测异常轮次；如果某轮 `duration > 30s` 或 `retransmissions > 1000`，会自动降低后续探索率。
 
 DQN 训练默认同样只输出每轮指标摘要，例如：
 
 ```text
 DQN training:   1%|...| 1/100 [..]
-[DQN-TRAIN] round=1/100 epsilon=0.450 acked=240/240 duration=...s throughput=...Mbps avg_rtt=...ms srtt=...ms retx=... fast=... timeout=... ckpt=artifacts/checkpoints/dqn/...
+[DQN-TRAIN] round=1/100 epsilon=0.200 acked=160/160 duration=...s throughput=...Mbps avg_rtt=...ms srtt=...ms retx=... fast=... timeout=... ckpt=artifacts/checkpoints/dqn/...
 ```
 
 每轮结束后会保存一份模型 checkpoint，并将 round、epsilon、checkpoint、吞吐、RTT、重传等指标追加到 summary CSV。如需观察发送端日志中的 `[SENDER][DQN]` 连续状态、动作编号、CWND 乘数、新 CWND、经验池大小和 reward，可额外加 `--verbose-sender`。训练后的最新模型权重保存在 `artifacts/models/active/dqn_model.pt`。如果只想评估模型而不继续在线训练或覆盖权重，给 `sender.py` 加 `--dqn-eval`。

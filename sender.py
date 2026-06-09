@@ -40,8 +40,10 @@ DQN_STATE_FEATURES = (
     "cwnd",
     "ack_ratio",
 )
-DQN_ACTION_MULTIPLIERS = (0.50, 0.85, 1.00, 1.35, 1.75)
+DQN_ACTION_MULTIPLIERS = (0.70, 0.90, 1.00, 1.10, 1.25)
 DQN_ACTION_NAMES = ("halve", "gentle_decrease", "hold", "probe_plus", "probe_fast")
+DQN_MIN_PROBE_INCREASE = 0.50
+DQN_MAX_INCREASE_PER_STEP = 1.00
 
 
 @dataclass
@@ -286,7 +288,11 @@ class CongestionController:
 
     def _apply_dqn_action(self, multiplier: float) -> float:
         if multiplier > 1.0:
-            next_cwnd = max(self.cwnd + 1.0, self.cwnd * multiplier)
+            desired_cwnd = max(
+                self.cwnd + DQN_MIN_PROBE_INCREASE,
+                self.cwnd * multiplier,
+            )
+            next_cwnd = min(desired_cwnd, self.cwnd + DQN_MAX_INCREASE_PER_STEP)
         else:
             next_cwnd = self.cwnd * multiplier
         return min(self.max_cwnd, max(1.0, next_cwnd))

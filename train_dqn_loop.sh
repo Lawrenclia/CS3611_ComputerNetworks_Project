@@ -1,11 +1,11 @@
 #!/bin/bash
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 PORT=9001
-PACKETS=240
+PACKETS=160
 ROUNDS=100
-INIT_EPSILON=0.45
-EPSILON_DECAY=0.97
-MIN_EPSILON=0.03
+INIT_EPSILON=0.20
+EPSILON_DECAY=0.95
+MIN_EPSILON=0.02
 MODEL="$ROOT/artifacts/models/active/dqn_model.pt"
 BACKUP_DIR="$ROOT/artifacts/models/backups"
 
@@ -33,8 +33,8 @@ for ((i=0; i<ROUNDS; i++)); do
         --packets $PACKETS \
         --start-seq $START_SEQ \
         --cc-mode dqn \
-        --window-size 8 \
-        --max-cwnd 80 \
+        --window-size 4 \
+        --max-cwnd 40 \
         --epsilon $EPSILON \
         --q-gamma 0.90 \
         --rto 0.2 \
@@ -43,10 +43,10 @@ for ((i=0; i<ROUNDS; i++)); do
         --dqn-batch-size 32 \
         --dqn-replay-capacity 4096 \
         --dqn-target-update 20 \
-        --reward-throughput-weight 2.4 \
-        --reward-timeout-weight 7.0 \
-        --reward-retx-weight 1.2 \
-        --reward-rtt-weight 0.006 \
+        --reward-throughput-weight 1.8 \
+        --reward-timeout-weight 18.0 \
+        --reward-retx-weight 3.0 \
+        --reward-rtt-weight 0.004 \
         --metrics-file "$ROOT/artifacts/training/dqn_metrics.csv" \
         --history-file "$ROOT/artifacts/training/dqn_history.csv" \
         --quiet

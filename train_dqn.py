@@ -133,6 +133,21 @@ def tqdm_postfix(row: dict[str, str] | None, checkpoint: Path | None) -> dict[st
     }
 
 
+def is_storm_round(
+    row: dict[str, str] | None,
+    retx_threshold: int,
+    duration_threshold: float,
+) -> bool:
+    if row is None:
+        return False
+    try:
+        retransmissions = int(row.get("retransmissions", "0") or 0)
+        duration = float(row.get("duration_s", "0") or 0.0)
+    except ValueError:
+        return False
+    return retransmissions > retx_threshold or duration > duration_threshold
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Multi-round DQN congestion-control trainer")
     parser.add_argument(
@@ -141,12 +156,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="use a faster training preset for quick iteration",
     )
     parser.add_argument("--rounds", type=int, default=100)
-    parser.add_argument("--packets", type=int, default=240)
+    parser.add_argument("--packets", type=int, default=160)
     parser.add_argument("--receiver-port", type=int, default=9301)
     parser.add_argument("--sender-port", type=int, default=9300)
-    parser.add_argument("--window-size", type=int, default=8)
-    parser.add_argument("--max-window", type=int, default=80)
-    parser.add_argument("--rto", type=float, default=0.20)
+    parser.add_argument("--window-size", type=int, default=4)
+    parser.add_argument("--max-window", type=int, default=40)
+    parser.add_argument("--rto", type=float, default=0.30)
     parser.add_argument("--dqn-model", default="artifacts/models/active/dqn_model.pt")
     parser.add_argument("--reset-dqn-model", action="store_true", help="backup and remove the active model before training")
     parser.add_argument("--model-backup-dir", default="artifacts/models/backups")
@@ -155,14 +170,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dqn-replay-capacity", type=int, default=4096)
     parser.add_argument("--dqn-target-update", type=int, default=20)
     parser.add_argument("--dqn-gamma", type=float, default=0.90)
-    parser.add_argument("--epsilon", type=float, default=0.45)
-    parser.add_argument("--reward-throughput-weight", type=float, default=2.4)
-    parser.add_argument("--reward-timeout-weight", type=float, default=7.0)
-    parser.add_argument("--reward-retx-weight", type=float, default=1.2)
-    parser.add_argument("--reward-rtt-weight", type=float, default=0.006)
-    parser.add_argument("--epsilon-decay", type=float, default=0.97)
-    parser.add_argument("--min-epsilon", type=float, default=0.03)
-    parser.add_argument("--loss-rate", type=float, default=0.04)
+    parser.add_argument("--epsilon", type=float, default=0.20)
+    parser.add_argument("--reward-throughput-weight", type=float, default=1.8)
+    parser.add_argument("--reward-timeout-weight", type=float, default=18.0)
+    parser.add_argument("--reward-retx-weight", type=float, default=3.0)
+    parser.add_argument("--reward-rtt-weight", type=float, default=0.004)
+    parser.add_argument("--epsilon-decay", type=float, default=0.95)
+    parser.add_argument("--min-epsilon", type=float, default=0.02)
+    parser.add_argument("--loss-rate", type=float, default=0.02)
     parser.add_argument("--delay-ms", type=float, default=20.0)
     parser.add_argument("--jitter-ms", type=float, default=10.0)
     parser.add_argument("--link-service-delay-ms", type=float, default=10.0)
@@ -174,6 +189,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint-dir", default="artifacts/checkpoints/dqn")
     parser.add_argument("--checkpoint-every", type=int, default=5)
     parser.add_argument("--summary-file", default="artifacts/training/dqn_summary.csv")
+    parser.add_argument("--storm-retx-threshold", type=int, default=1000)
+    parser.add_argument("--storm-duration-threshold", type=float, default=30.0)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--quiet-sender", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--verbose-sender", action="store_true")
@@ -244,6 +261,10 @@ def main() -> None:
         raise SystemExit("--reward-retx-weight must be non-negative")
     if args.reward_rtt_weight < 0:
         raise SystemExit("--reward-rtt-weight must be non-negative")
+    if args.storm_retx_threshold < 0:
+        raise SystemExit("--storm-retx-threshold must be non-negative")
+    if args.storm_duration_threshold < 0:
+        raise SystemExit("--storm-duration-threshold must be non-negative")
 
     root = Path(__file__).resolve().parent
     dqn_model = str((root / args.dqn_model).resolve())
@@ -298,8 +319,12 @@ def main() -> None:
         )
 
     try:
+        epsilon_scale = 1.0
         for round_index in range(args.rounds):
-            epsilon = max(args.min_epsilon, args.epsilon * (args.epsilon_decay ** round_index))
+            epsilon = max(
+                args.min_epsilon,
+                args.epsilon * (args.epsilon_decay ** round_index) * epsilon_scale,
+            )
             local_port = args.sender_port + round_index
             if local_port == args.receiver_port:
                 local_port += args.rounds + 1
@@ -391,6 +416,17 @@ def main() -> None:
                 progress.write(message)
             else:
                 print(message, flush=True)
+            if is_storm_round(
+                latest_metrics,
+                retx_threshold=args.storm_retx_threshold,
+                duration_threshold=args.storm_duration_threshold,
+            ):
+                epsilon_scale = max(0.25, epsilon_scale * 0.5)
+                print(
+                    "[DQN-TRAIN] storm detected; reducing future exploration "
+                    f"epsilon_scale={epsilon_scale:.3f}",
+                    flush=True,
+                )
     finally:
         if progress is not None:
             progress.close()
