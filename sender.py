@@ -32,7 +32,16 @@ Q_EXPANDED_STATE_NAMES = tuple(
 )
 Q_ACTION_KEYS = ("0", "1", "2")
 Q_ACTION_NAMES = ("hold", "cwnd+1", "cwnd/2")
-DQN_ACTION_MULTIPLIERS = (0.50, 0.75, 1.00, 1.25, 1.50)
+DQN_STATE_FEATURES = (
+    "rtt_ms",
+    "rtt_trend_percent",
+    "loss_percent",
+    "timeout_percent",
+    "cwnd",
+    "ack_ratio",
+)
+DQN_ACTION_MULTIPLIERS = (0.50, 0.85, 1.00, 1.35, 1.75)
+DQN_ACTION_NAMES = ("halve", "gentle_decrease", "hold", "probe_plus", "probe_fast")
 
 
 @dataclass
@@ -62,6 +71,7 @@ class CongestionController:
         dqn_batch_size: int,
         dqn_replay_capacity: int,
         dqn_target_update: int,
+        dqn_eval: bool,
         verbose: bool,
     ) -> None:
         self.mode = mode
@@ -80,6 +90,7 @@ class CongestionController:
         self.dqn_batch_size = dqn_batch_size
         self.dqn_replay_capacity = dqn_replay_capacity
         self.dqn_target_update = dqn_target_update
+        self.dqn_eval = dqn_eval
         self.verbose = verbose
 
         self.q_table = [[0.0, 0.0, 0.0] for _ in Q_STATE_NAMES]
@@ -229,7 +240,11 @@ class CongestionController:
     def _step_dqn(self, srtt: float | None) -> tuple[str, object, float, str]:
         state = self._continuous_state(srtt)
         reward = self._reward()
-        if self.dqn_last_state is not None and self.dqn_last_action is not None:
+        if (
+            not self.dqn_eval
+            and self.dqn_last_state is not None
+            and self.dqn_last_action is not None
+        ):
             self.dqn_replay.append(
                 (self.dqn_last_state, self.dqn_last_action, reward, state)
             )
@@ -238,49 +253,80 @@ class CongestionController:
         action = self._choose_dqn_action(state)
         old_cwnd = self.cwnd
         multiplier = DQN_ACTION_MULTIPLIERS[action]
-        self.cwnd = min(self.max_cwnd, max(1.0, self.cwnd * multiplier))
-        self.dqn_last_state = state
-        self.dqn_last_action = action
+        self.cwnd = self._apply_dqn_action(multiplier)
+        if not self.dqn_eval:
+            self.dqn_last_state = state
+            self.dqn_last_action = action
         self.dqn_steps += 1
-        if self.dqn_steps % self.dqn_target_update == 0:
+        if not self.dqn_eval and self.dqn_steps % self.dqn_target_update == 0:
             self.dqn_target.load_state_dict(self.dqn_policy.state_dict())
 
-        loss_rate = self._interval_loss_rate()
         detail = (
-            "state=[rtt_ms={rtt:.3f}, loss_pct={loss:.2f}, cwnd={old:.2f}] "
-            "action={action} multiplier={mult:.2f} cwnd={new:.2f} replay={replay}"
+            "state=[rtt_ms={rtt:.3f}, rtt_trend_pct={trend:.2f}, loss_pct={loss:.2f}, "
+            "timeout_pct={timeout:.2f}, cwnd={old:.2f}, ack_ratio={ack_ratio:.2f}] "
+            "action={action}({action_name}) multiplier={mult:.2f} cwnd={new:.2f} "
+            "replay={replay} eval={eval_mode}"
         ).format(
             rtt=state[0],
-            loss=loss_rate * 100.0,
+            trend=state[1],
+            loss=state[2],
+            timeout=state[3],
             old=old_cwnd,
+            ack_ratio=state[5],
             action=action,
+            action_name=DQN_ACTION_NAMES[action],
             mult=multiplier,
             new=self.cwnd,
             replay=len(self.dqn_replay),
+            eval_mode=self.dqn_eval,
         )
         self._reset_interval()
         self.last_srtt = srtt
         return "dqn", (state, action, multiplier), reward, detail
 
-    def _continuous_state(self, srtt: float | None) -> tuple[float, float, float]:
+    def _apply_dqn_action(self, multiplier: float) -> float:
+        if multiplier > 1.0:
+            next_cwnd = max(self.cwnd + 1.0, self.cwnd * multiplier)
+        else:
+            next_cwnd = self.cwnd * multiplier
+        return min(self.max_cwnd, max(1.0, next_cwnd))
+
+    def _continuous_state(self, srtt: float | None) -> tuple[float, ...]:
         avg_rtt = (
             self.interval_rtt_sum / self.interval_rtt_count
             if self.interval_rtt_count
             else (srtt or self.last_srtt or 0.0)
         )
+        if self.last_srtt and self.last_srtt > 0:
+            rtt_trend_percent = ((avg_rtt - self.last_srtt) / self.last_srtt) * 100.0
+        else:
+            rtt_trend_percent = 0.0
+        total_events = self.interval_acked + self.interval_losses
+        timeout_percent = (
+            (self.interval_timeouts / total_events) * 100.0
+            if total_events > 0
+            else 0.0
+        )
+        ack_ratio = self.interval_acked / max(1.0, self.cwnd)
         return (
             float(avg_rtt * 1000.0),
+            float(rtt_trend_percent),
             float(self._interval_loss_rate() * 100.0),
+            float(timeout_percent),
             float(self.cwnd),
+            float(ack_ratio),
         )
 
-    def _normalized_dqn_state(self, state: tuple[float, float, float]):
-        rtt_ms, loss_pct, cwnd = state
+    def _normalized_dqn_state(self, state: tuple[float, ...]):
+        rtt_ms, rtt_trend_pct, loss_pct, timeout_pct, cwnd, ack_ratio = state
         return self.torch.tensor(
             [
                 min(rtt_ms / 1000.0, 10.0),
+                min(max(rtt_trend_pct / 100.0, -1.0), 1.0),
                 min(max(loss_pct / 100.0, 0.0), 1.0),
+                min(max(timeout_pct / 100.0, 0.0), 1.0),
                 min(max(cwnd / self.max_cwnd, 0.0), 1.0),
+                min(max(ack_ratio / 2.0, 0.0), 1.0),
             ],
             dtype=self.torch.float32,
         )
@@ -291,8 +337,8 @@ class CongestionController:
             return 0.0
         return self.interval_losses / total
 
-    def _choose_dqn_action(self, state: tuple[float, float, float]) -> int:
-        if random.random() < self.epsilon:
+    def _choose_dqn_action(self, state: tuple[float, ...]) -> int:
+        if not self.dqn_eval and random.random() < self.epsilon:
             return random.randrange(len(DQN_ACTION_MULTIPLIERS))
         with self.torch.no_grad():
             q_values = self.dqn_policy(self._normalized_dqn_state(state).unsqueeze(0))
@@ -340,11 +386,11 @@ class CongestionController:
             def __init__(self) -> None:
                 super().__init__()
                 self.net = nn.Sequential(
-                    nn.Linear(3, 32),
+                    nn.Linear(len(DQN_STATE_FEATURES), 64),
                     nn.ReLU(),
-                    nn.Linear(32, 32),
+                    nn.Linear(64, 64),
                     nn.ReLU(),
-                    nn.Linear(32, len(DQN_ACTION_MULTIPLIERS)),
+                    nn.Linear(64, len(DQN_ACTION_MULTIPLIERS)),
                 )
 
             def forward(self, x):
@@ -357,15 +403,38 @@ class CongestionController:
         self.dqn_loss_fn = nn.SmoothL1Loss()
         if self.dqn_model_file and self.dqn_model_file.exists():
             checkpoint = torch.load(self.dqn_model_file, map_location="cpu")
-            self.dqn_policy.load_state_dict(checkpoint["policy_state_dict"])
-            if "optimizer_state_dict" in checkpoint:
-                self.dqn_optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-            self.dqn_steps = int(checkpoint.get("steps", 0))
+            if self._dqn_checkpoint_compatible(checkpoint):
+                try:
+                    self.dqn_policy.load_state_dict(checkpoint["policy_state_dict"])
+                    if "optimizer_state_dict" in checkpoint and not self.dqn_eval:
+                        self.dqn_optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+                    self.dqn_steps = int(checkpoint.get("steps", 0))
+                except RuntimeError as exc:
+                    if self.verbose:
+                        print(f"[SENDER][DQN] ignore incompatible model weights: {exc}", flush=True)
+            elif self.verbose:
+                print(
+                    f"[SENDER][DQN] ignore old model architecture: {self.dqn_model_file}",
+                    flush=True,
+                )
         self.dqn_target.load_state_dict(self.dqn_policy.state_dict())
         self.dqn_target.eval()
 
+    def _dqn_checkpoint_compatible(self, checkpoint: object) -> bool:
+        if not isinstance(checkpoint, dict) or "policy_state_dict" not in checkpoint:
+            return False
+        state_features = checkpoint.get("state_features")
+        if list(state_features or []) != list(DQN_STATE_FEATURES):
+            return False
+        action_multipliers = checkpoint.get("action_multipliers", checkpoint.get("actions"))
+        try:
+            loaded_actions = tuple(float(value) for value in action_multipliers)
+        except (TypeError, ValueError):
+            return False
+        return loaded_actions == DQN_ACTION_MULTIPLIERS
+
     def _save_dqn(self) -> None:
-        if self.dqn_model_file is None or self.dqn_policy is None:
+        if self.dqn_eval or self.dqn_model_file is None or self.dqn_policy is None:
             return
         self.dqn_model_file.parent.mkdir(parents=True, exist_ok=True)
         self.torch.save(
@@ -373,8 +442,9 @@ class CongestionController:
                 "policy_state_dict": self.dqn_policy.state_dict(),
                 "optimizer_state_dict": self.dqn_optimizer.state_dict(),
                 "steps": self.dqn_steps,
-                "actions": DQN_ACTION_MULTIPLIERS,
-                "state_features": ["rtt_ms", "loss_percent", "cwnd"],
+                "action_multipliers": DQN_ACTION_MULTIPLIERS,
+                "action_names": DQN_ACTION_NAMES,
+                "state_features": DQN_STATE_FEATURES,
                 "max_cwnd": self.max_cwnd,
             },
             self.dqn_model_file,
@@ -498,6 +568,7 @@ class ReliableSender:
         dqn_batch_size: int = 16,
         dqn_replay_capacity: int = 1024,
         dqn_target_update: int = 10,
+        dqn_eval: bool = False,
         metrics_file: str | None = None,
         history_file: str | None = None,
         plot_file: str | None = None,
@@ -548,6 +619,7 @@ class ReliableSender:
             dqn_batch_size=dqn_batch_size,
             dqn_replay_capacity=dqn_replay_capacity,
             dqn_target_update=dqn_target_update,
+            dqn_eval=dqn_eval,
             verbose=verbose,
         )
         self.metrics_file = Path(metrics_file) if metrics_file else None
@@ -991,6 +1063,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dqn-batch-size", type=int, default=16)
     parser.add_argument("--dqn-replay-capacity", type=int, default=1024)
     parser.add_argument("--dqn-target-update", type=int, default=10)
+    parser.add_argument(
+        "--dqn-eval",
+        action="store_true",
+        help="run DQN in evaluation mode: no random exploration, online training, or model overwrite",
+    )
     parser.add_argument("--metrics-file", default="artifacts/metrics/metrics.csv")
     parser.add_argument("--history-file", default="artifacts/metrics/history.csv")
     parser.add_argument("--plot-file", default=None)
@@ -1099,6 +1176,7 @@ def main() -> None:
         dqn_batch_size=args.dqn_batch_size,
         dqn_replay_capacity=args.dqn_replay_capacity,
         dqn_target_update=args.dqn_target_update,
+        dqn_eval=args.dqn_eval,
         metrics_file=args.metrics_file,
         history_file=args.history_file,
         plot_file=args.plot_file,

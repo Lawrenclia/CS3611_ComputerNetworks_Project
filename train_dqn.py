@@ -39,6 +39,16 @@ def save_checkpoint(source: Path, checkpoint_dir: Path, round_index: int, row: d
     return target
 
 
+def reset_model(model_path: Path, backup_dir: Path) -> Path | None:
+    if not model_path.exists():
+        return None
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup = backup_dir / f"{model_path.stem}_backup_{time.strftime('%Y%m%d-%H%M%S')}{model_path.suffix}"
+    shutil.copy2(model_path, backup)
+    model_path.unlink()
+    return backup
+
+
 def append_summary(
     path: Path,
     round_index: int,
@@ -130,36 +140,39 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="use a faster training preset for quick iteration",
     )
-    parser.add_argument("--rounds", type=int, default=50)
-    parser.add_argument("--packets", type=int, default=160)
+    parser.add_argument("--rounds", type=int, default=100)
+    parser.add_argument("--packets", type=int, default=240)
     parser.add_argument("--receiver-port", type=int, default=9301)
     parser.add_argument("--sender-port", type=int, default=9300)
     parser.add_argument("--window-size", type=int, default=8)
     parser.add_argument("--max-window", type=int, default=80)
     parser.add_argument("--rto", type=float, default=0.20)
     parser.add_argument("--dqn-model", default="artifacts/models/active/dqn_model.pt")
-    parser.add_argument("--dqn-lr", type=float, default=0.001)
-    parser.add_argument("--dqn-batch-size", type=int, default=16)
-    parser.add_argument("--dqn-replay-capacity", type=int, default=1024)
-    parser.add_argument("--dqn-target-update", type=int, default=10)
-    parser.add_argument("--epsilon", type=float, default=0.35)
-    parser.add_argument("--reward-throughput-weight", type=float, default=1.0)
-    parser.add_argument("--reward-timeout-weight", type=float, default=10.0)
-    parser.add_argument("--reward-retx-weight", type=float, default=2.0)
-    parser.add_argument("--reward-rtt-weight", type=float, default=0.015)
-    parser.add_argument("--epsilon-decay", type=float, default=0.85)
-    parser.add_argument("--min-epsilon", type=float, default=0.05)
-    parser.add_argument("--loss-rate", type=float, default=0.06)
+    parser.add_argument("--reset-dqn-model", action="store_true", help="backup and remove the active model before training")
+    parser.add_argument("--model-backup-dir", default="artifacts/models/backups")
+    parser.add_argument("--dqn-lr", type=float, default=0.0007)
+    parser.add_argument("--dqn-batch-size", type=int, default=32)
+    parser.add_argument("--dqn-replay-capacity", type=int, default=4096)
+    parser.add_argument("--dqn-target-update", type=int, default=20)
+    parser.add_argument("--dqn-gamma", type=float, default=0.90)
+    parser.add_argument("--epsilon", type=float, default=0.45)
+    parser.add_argument("--reward-throughput-weight", type=float, default=2.4)
+    parser.add_argument("--reward-timeout-weight", type=float, default=7.0)
+    parser.add_argument("--reward-retx-weight", type=float, default=1.2)
+    parser.add_argument("--reward-rtt-weight", type=float, default=0.006)
+    parser.add_argument("--epsilon-decay", type=float, default=0.97)
+    parser.add_argument("--min-epsilon", type=float, default=0.03)
+    parser.add_argument("--loss-rate", type=float, default=0.04)
     parser.add_argument("--delay-ms", type=float, default=20.0)
     parser.add_argument("--jitter-ms", type=float, default=10.0)
     parser.add_argument("--link-service-delay-ms", type=float, default=10.0)
     parser.add_argument("--link-queue-capacity", type=int, default=20)
-    parser.add_argument("--link-bandwidth-drop-after-packets", type=int, default=80)
+    parser.add_argument("--link-bandwidth-drop-after-packets", type=int, default=0)
     parser.add_argument("--link-bandwidth-drop-factor", type=float, default=0.5)
     parser.add_argument("--metrics-file", default="artifacts/training/dqn_metrics.csv")
     parser.add_argument("--history-file", default="artifacts/training/dqn_history.csv")
     parser.add_argument("--checkpoint-dir", default="artifacts/checkpoints/dqn")
-    parser.add_argument("--checkpoint-every", type=int, default=1)
+    parser.add_argument("--checkpoint-every", type=int, default=5)
     parser.add_argument("--summary-file", default="artifacts/training/dqn_summary.csv")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--quiet-sender", action="store_true", help=argparse.SUPPRESS)
@@ -213,6 +226,16 @@ def main() -> None:
         raise SystemExit("--link-bandwidth-drop-after-packets must be non-negative")
     if args.checkpoint_every <= 0:
         raise SystemExit("--checkpoint-every must be positive")
+    if args.dqn_lr <= 0:
+        raise SystemExit("--dqn-lr must be positive")
+    if args.dqn_batch_size <= 0:
+        raise SystemExit("--dqn-batch-size must be positive")
+    if args.dqn_replay_capacity <= 0:
+        raise SystemExit("--dqn-replay-capacity must be positive")
+    if args.dqn_target_update <= 0:
+        raise SystemExit("--dqn-target-update must be positive")
+    if not 0 <= args.dqn_gamma <= 1:
+        raise SystemExit("--dqn-gamma must be between 0 and 1")
     if args.reward_throughput_weight < 0:
         raise SystemExit("--reward-throughput-weight must be non-negative")
     if args.reward_timeout_weight < 0:
@@ -224,10 +247,19 @@ def main() -> None:
 
     root = Path(__file__).resolve().parent
     dqn_model = str((root / args.dqn_model).resolve())
+    dqn_model_path = Path(dqn_model)
     metrics_file = str((root / args.metrics_file).resolve())
     history_file = str((root / args.history_file).resolve())
     checkpoint_dir = (root / args.checkpoint_dir).resolve()
     summary_file = (root / args.summary_file).resolve()
+    model_backup_dir = (root / args.model_backup_dir).resolve()
+    if args.reset_dqn_model:
+        backup = reset_model(dqn_model_path, model_backup_dir)
+        if backup is None:
+            print(f"[DQN-TRAIN] no existing model to reset at {dqn_model_path}", flush=True)
+        else:
+            print(f"[DQN-TRAIN] backed up old model to {backup}", flush=True)
+            print(f"[DQN-TRAIN] starting from a fresh DQN model at {dqn_model_path}", flush=True)
     receiver_cmd = [
         sys.executable,
         str(root / "receiver.py"),
@@ -296,6 +328,8 @@ def main() -> None:
                 str(args.max_window),
                 "--epsilon",
                 str(epsilon),
+                "--q-gamma",
+                str(args.dqn_gamma),
                 "--reward-throughput-weight",
                 str(args.reward_throughput_weight),
                 "--reward-timeout-weight",
