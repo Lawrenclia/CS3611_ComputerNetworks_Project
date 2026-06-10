@@ -173,6 +173,7 @@ def make_scenarios(root: Path, result_dir: Path, args: argparse.Namespace) -> tu
             extra_args=[
                 "--epsilon",
                 "0.0",
+                "--q-eval",
                 "--qtable-file",
                 str(root / "artifacts" / "models" / "active" / "q_table.json"),
             ],
@@ -222,6 +223,7 @@ def make_scenarios(root: Path, result_dir: Path, args: argparse.Namespace) -> tu
             extra_args=[
                 "--epsilon",
                 "0.0",
+                "--q-eval",
                 "--qtable-file",
                 str(root / "artifacts" / "models" / "active" / "q_table.json"),
                 "--link-bandwidth-drop-after-packets",

@@ -68,6 +68,7 @@ class CongestionController:
         reward_timeout_weight: float,
         reward_retx_weight: float,
         reward_cwnd_weight: float,
+        reward_target_rtt_ms: float | None,
         qtable_file: str | None,
         dqn_model_file: str | None,
         dqn_lr: float,
@@ -75,6 +76,7 @@ class CongestionController:
         dqn_replay_capacity: int,
         dqn_target_update: int,
         dqn_eval: bool,
+        q_eval: bool,
         verbose: bool,
     ) -> None:
         self.mode = mode
@@ -88,6 +90,7 @@ class CongestionController:
         self.reward_timeout_weight = reward_timeout_weight
         self.reward_retx_weight = reward_retx_weight
         self.reward_cwnd_weight = reward_cwnd_weight
+        self.reward_target_rtt_ms = reward_target_rtt_ms
         self.qtable_file = Path(qtable_file) if qtable_file else None
         self.dqn_model_file = Path(dqn_model_file) if dqn_model_file else None
         self.dqn_lr = dqn_lr
@@ -95,6 +98,7 @@ class CongestionController:
         self.dqn_replay_capacity = dqn_replay_capacity
         self.dqn_target_update = dqn_target_update
         self.dqn_eval = dqn_eval
+        self.q_eval = q_eval
         self.verbose = verbose
 
         self.q_table = [[0.0, 0.0, 0.0] for _ in Q_STATE_NAMES]
@@ -155,11 +159,12 @@ class CongestionController:
 
         state = self._state_from_interval(srtt)
         reward = self._reward()
-        old = self.q_table[self.last_state][self.last_action]
-        best_next = max(self.q_table[state])
-        self.q_table[self.last_state][self.last_action] = old + self.alpha * (
-            reward + self.gamma * best_next - old
-        )
+        if not self.q_eval:
+            old = self.q_table[self.last_state][self.last_action]
+            best_next = max(self.q_table[state])
+            self.q_table[self.last_state][self.last_action] = old + self.alpha * (
+                reward + self.gamma * best_next - old
+            )
 
         action = self._choose_action(state)
         self._apply_action(action)
@@ -173,7 +178,7 @@ class CongestionController:
         if self.mode == "dqn":
             self._save_dqn()
             return
-        if self.mode != "qlearning" or self.qtable_file is None:
+        if self.mode != "qlearning" or self.qtable_file is None or self.q_eval:
             return
         try:
             self.qtable_file.parent.mkdir(parents=True, exist_ok=True)
@@ -201,7 +206,7 @@ class CongestionController:
                 print(f"[SENDER][QLEARN] failed to save q-table to {self.qtable_file}: {exc}", flush=True)
 
     def _choose_action(self, state: int) -> int:
-        if random.random() < self.epsilon:
+        if not self.q_eval and random.random() < self.epsilon:
             return random.randrange(len(Q_ACTION_KEYS))
         row = self.q_table[state]
         return max(range(len(Q_ACTION_KEYS)), key=lambda i: row[i])
@@ -234,11 +239,15 @@ class CongestionController:
             else 0.0
         )
         avg_rtt_ms = avg_rtt * 1000.0
+        if self.reward_target_rtt_ms is None:
+            rtt_penalty_ms = avg_rtt_ms
+        else:
+            rtt_penalty_ms = max(0.0, avg_rtt_ms - self.reward_target_rtt_ms)
         return (
             self.reward_throughput_weight * self.interval_acked
             - self.reward_timeout_weight * self.interval_timeouts
             - self.reward_retx_weight * self.interval_retransmissions
-            - self.reward_rtt_weight * avg_rtt_ms
+            - self.reward_rtt_weight * rtt_penalty_ms
         )
 
     def _step_dqn(self, srtt: float | None) -> tuple[str, object, float, str]:
@@ -574,6 +583,7 @@ class ReliableSender:
         reward_timeout_weight: float = 10.0,
         reward_retx_weight: float = 2.0,
         reward_cwnd_weight: float = 0.0,
+        reward_target_rtt_ms: float | None = None,
         qtable_file: str | None = "artifacts/models/active/q_table.json",
         dqn_model_file: str | None = "artifacts/models/active/dqn_model.pt",
         dqn_lr: float = 0.001,
@@ -581,6 +591,7 @@ class ReliableSender:
         dqn_replay_capacity: int = 1024,
         dqn_target_update: int = 10,
         dqn_eval: bool = False,
+        q_eval: bool = False,
         metrics_file: str | None = None,
         history_file: str | None = None,
         plot_file: str | None = None,
@@ -626,6 +637,7 @@ class ReliableSender:
             reward_timeout_weight=reward_timeout_weight,
             reward_retx_weight=reward_retx_weight,
             reward_cwnd_weight=reward_cwnd_weight,
+            reward_target_rtt_ms=reward_target_rtt_ms,
             qtable_file=qtable_file,
             dqn_model_file=dqn_model_file,
             dqn_lr=dqn_lr,
@@ -633,6 +645,7 @@ class ReliableSender:
             dqn_replay_capacity=dqn_replay_capacity,
             dqn_target_update=dqn_target_update,
             dqn_eval=dqn_eval,
+            q_eval=q_eval,
             verbose=verbose,
         )
         self.metrics_file = Path(metrics_file) if metrics_file else None
@@ -1036,7 +1049,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="cc_mode",
         choices=("fixed", "aimd", "qlearning", "q-learning", "dqn"),
         default="fixed",
-        help="congestion control mode: fixed window, AIMD baseline, Q-Learning, or DQN",
+        help="congestion control mode: fixed, AIMD, Q-Learning, or DQN",
     )
     parser.add_argument("--max-cwnd", "--max-window", dest="max_cwnd", type=float, default=100.0)
     parser.add_argument("--epsilon", "--q-epsilon", dest="epsilon", type=float, default=0.10)
@@ -1068,7 +1081,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--reward-rtt-weight",
         type=float,
         default=0.015,
-        help="reward penalty per millisecond of average RTT",
+        help="reward penalty per millisecond of RTT, or excess RTT when --reward-target-rtt-ms is set",
+    )
+    parser.add_argument(
+        "--reward-target-rtt-ms",
+        type=float,
+        default=None,
+        help="only penalize RTT above this target; unset penalizes total average RTT",
     )
     parser.add_argument(
         "--reward-cwnd-weight",
@@ -1077,6 +1096,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="reward bonus per unit of CWND utilization (cwnd/max_cwnd); encourages DQN to avoid lazy policies",
     )
     parser.add_argument("--qtable-file", "--q-table", dest="qtable_file", default="artifacts/models/active/q_table.json")
+    parser.add_argument(
+        "--q-eval",
+        action="store_true",
+        help="run Q-Learning in evaluation mode: greedy actions without Bellman updates or Q-table overwrite",
+    )
     parser.add_argument("--dqn-model-file", default="artifacts/models/active/dqn_model.pt")
     parser.add_argument("--dqn-lr", type=float, default=0.001)
     parser.add_argument("--dqn-batch-size", type=int, default=16)
@@ -1103,7 +1127,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reward-gamma", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--reward-delta", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--reward-queue-weight", type=float, default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--reward-target-rtt-ms", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--quiet", action="store_true")
     return parser
 
@@ -1148,6 +1171,8 @@ def main() -> None:
         raise SystemExit("--reward-rtt-weight must be non-negative")
     if args.reward_cwnd_weight < 0:
         raise SystemExit("--reward-cwnd-weight must be non-negative")
+    if args.reward_target_rtt_ms is not None and args.reward_target_rtt_ms < 0:
+        raise SystemExit("--reward-target-rtt-ms must be non-negative")
     if args.dqn_lr <= 0:
         raise SystemExit("--dqn-lr must be positive")
     if args.dqn_batch_size <= 0:
@@ -1192,6 +1217,7 @@ def main() -> None:
         reward_timeout_weight=args.reward_timeout_weight,
         reward_retx_weight=args.reward_retx_weight,
         reward_cwnd_weight=args.reward_cwnd_weight,
+        reward_target_rtt_ms=args.reward_target_rtt_ms,
         qtable_file=args.qtable_file,
         dqn_model_file=args.dqn_model_file,
         dqn_lr=args.dqn_lr,
@@ -1199,6 +1225,7 @@ def main() -> None:
         dqn_replay_capacity=args.dqn_replay_capacity,
         dqn_target_update=args.dqn_target_update,
         dqn_eval=args.dqn_eval,
+        q_eval=args.q_eval,
         metrics_file=args.metrics_file,
         history_file=args.history_file,
         plot_file=args.plot_file,

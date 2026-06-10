@@ -119,7 +119,7 @@ python3 sender.py --cc-mode fixed --window-size 8
 python3 sender.py --cc-mode aimd --window-size 1 --max-cwnd 80
 
 # Q-Learning：按 RTT 趋势和丢包事件离散成 6 个状态，动作是保持、CWND+1、CWND/2
-python3 sender.py --cc-mode qlearning --window-size 1 --max-cwnd 80
+python3 sender.py --cc-mode qlearning --window-size 1 --max-cwnd 64 --q-eval
 
 # DQN：输入 RTT、RTT 趋势、丢包/timeout、CWND 和 ACK 利用率，神经网络输出 CWND 调整动作
 python3 sender.py --cc-mode dqn --window-size 8 --max-cwnd 80
@@ -142,46 +142,43 @@ python3 sender.py \
 reward = throughput_weight * acked_packets
        - timeout_weight * timeout_events
        - retx_weight * retransmissions
-       - rtt_weight * avg_rtt_ms
+       - rtt_weight * max(0, avg_rtt_ms - reward_target_rtt_ms)
 ```
 
-这组参数仍奖励吞吐，但会显式重罚 RTO timeout。默认下，fast retransmit 主要承担 `retx_weight` 惩罚，而 timeout 会同时承担 `timeout_weight + retx_weight`，更符合 timeout 比快速重传更伤性能的常识。若希望 AI 更激进，可把 `--reward-timeout-weight` 降到 6 或把 `--reward-rtt-weight` 降到 0.010；若希望更稳，可把 timeout 权重提高到 15。
+默认训练环境与一键演示保持一致：300 个分组、`initial_cwnd=1`、`max_cwnd=64`、2% 随机丢包、10ms 延迟和 3ms 抖动。模型按最近 10 轮平均分挑选，避免训练环境与最终展示不一致，也减少单轮随机低丢包对选模的干扰。
 
-多轮训练默认只在终端输出每轮指标摘要，不显示 ACK、重传和学习细节日志：
+推荐直接跑一次完整训练。脚本会自动备份旧 active Q-Table、重置为 6 状态初始表、进行 100 轮 epsilon 衰减训练、保存每 5 轮 checkpoint、按“吞吐高、RTT 低、重传少、timeout 少”的综合分数挑选最佳表，并把最佳表安装回 `artifacts/models/active/q_table.json`，最后用贪心策略评估 5 轮：
 
 ```bash
-python3 train_q_learning.py \
-  --rounds 50 \
-  --packets 300 \
-  --q-table artifacts/models/active/q_table.json \
-  --checkpoint-dir artifacts/checkpoints/qlearning \
-  --summary-file artifacts/training/qlearning_summary.csv
+python3 train_q_learning.py
 ```
 
-推荐使用两阶段训练，第一阶段先在较温和环境里学会增大 CWND，第二阶段再提高丢包难度：
+如需从当前 active Q-Table 继续训练而不是重新开始，加 `--continue-q-table`。如需快速调参，可使用：
+
+```bash
+python3 train_q_learning.py --fast
+```
+
+`--fast` 会在不覆盖显式参数的前提下，把默认轮数降到 20、包数降到 60、Receiver delay 降到 5 ms、虚拟链路服务间隔降到 2 ms，并改为最后评估 2 轮。
+
+两阶段 curriculum 脚本仍可使用，适合做额外对照：
 
 ```bash
 python3 train_q_curriculum.py --install
 ```
 
-该命令会生成候选表 `artifacts/models/candidates/q_table_good.json`，并在 `--install` 时备份旧的 active Q-Table 后安装新策略到 `artifacts/models/active/q_table.json`。当前 Q-Learning 严格使用题目要求的 6 个状态：`RTT 趋势(变大/变小/平稳) × 是否发生丢包/重传`。每次运行的 metrics、history、summary 会保存到 `artifacts/training/q_curriculum_时间戳/`，checkpoint 会保存到 `artifacts/checkpoints/q_curriculum_时间戳/`。
-
-快速单阶段调参时可直接使用：
-
-```bash
-python3 train_q_learning.py --fast --reset-q-table
-```
-
-`--fast` 会在不覆盖显式参数的前提下，把默认包数降到 60、Receiver delay 降到 5 ms、虚拟链路服务间隔降到 2 ms，并改为每 5 轮保存一次 checkpoint。`--reset-q-table` 会先备份旧 Q-Table，再写入一个 6 状态初始表：RTT 下降或稳定且无丢包时倾向增窗，发生丢包/重传时倾向减窗，避免从坏表继续训练导致 CWND 长期卡在 1。
+该命令会生成候选表 `artifacts/models/candidates/q_table_good.json`，并在 `--install` 时备份旧的 active Q-Table 后安装新策略到 `artifacts/models/active/q_table.json`。当前 Q-Learning 严格使用题目要求的 6 个状态：`RTT 趋势(变大/变小/平稳) × 是否发生丢包/重传`。
 
 输出格式示例：
 
 ```text
-Q-Learning training:   2%|...| 1/50 [..]
-[TRAIN] round=1/50 epsilon=0.300 acked=300/300 duration=...s throughput=...Mbps avg_rtt=...ms srtt=...ms retx=... fast=... timeout=... ckpt=artifacts/checkpoints/qlearning/...
+Q-Learning training:   1%|...| 1/100 [..]
+[TRAIN] round=1/100 epsilon=0.350 acked=180/180 duration=...s throughput=...Mbps avg_rtt=...ms srtt=...ms retx=... fast=... timeout=... score=... ckpt=...
+[TRAIN] installed best Q-table from round=... score=... to artifacts/models/active/q_table.json
+[EVAL] round=1/5 acked=180/180 duration=...s throughput=...Mbps avg_rtt=...ms retx=... timeout=... score=...
 ```
 
-每轮结束后会保存一份 Q-Table checkpoint，并将 round、epsilon、checkpoint、吞吐、RTT、重传等指标追加到 summary CSV。进度条使用 `tqdm`；若未安装，脚本会提示 `python3 -m pip install tqdm` 并退回普通逐轮输出。默认 50 轮足够观察趋势；如果时间允许，建议改成 `--rounds 100`。可用 `--checkpoint-every 2` 改为每 2 轮保存一次。
+每轮都会将 round、epsilon、checkpoint、吞吐、RTT、重传等指标追加到 summary CSV；默认每 5 轮保存 checkpoint，并额外持续维护 `artifacts/models/candidates/q_table_best.json`。进度条使用 `tqdm`；若未安装，脚本会提示 `python3 -m pip install tqdm` 并退回普通逐轮输出。
 
 如需调试每个 ACK、FAST 重传或 Q-Learning 动作，可额外加 `--verbose-sender`。
 
@@ -191,6 +188,7 @@ Q-Learning training:   2%|...| 1/50 [..]
 python3 sender.py \
   --cc-mode qlearning \
   --packets 200 \
+  --q-eval \
   --metrics-file artifacts/metrics/metrics.csv \
   --history-file artifacts/metrics/history.csv \
   --plot-file artifacts/plots/qlearning_plot.png
@@ -234,6 +232,7 @@ python3 sender.py \
 python3 sender.py \
   --cc-mode qlearning \
   --packets 200 \
+  --q-eval \
   --link-bandwidth-drop-after-packets 100 \
   --link-bandwidth-drop-factor 0.5
 ```
@@ -288,9 +287,9 @@ python3 sender.py \
 python3 train_dqn.py \
   --reset-dqn-model \
   --rounds 100 \
-  --packets 160 \
-  --window-size 4 \
-  --max-window 40 \
+  --packets 180 \
+  --window-size 5 \
+  --max-window 48 \
   --dqn-model artifacts/models/active/dqn_model.pt \
   --checkpoint-dir artifacts/checkpoints/dqn \
   --summary-file artifacts/training/dqn_summary.csv
@@ -306,13 +305,13 @@ python3 train_dqn.py --fast
 
 DQN 的 `--fast` 会把默认包数降到 80、Receiver delay 降到 5 ms、虚拟链路服务间隔降到 2 ms，并使用较小 batch/replay 设置，适合先看训练方向是否正常；正式对比再改回默认或手动指定更大的 `--packets`。
 
-当前 DQN 训练默认走保守 curriculum：`--epsilon 0.20`、`--window-size 4`、`--max-window 40`、`--reward-throughput-weight 1.8`、`--reward-timeout-weight 18.0`、`--reward-retx-weight 3.0`、`--reward-rtt-weight 0.004`。这样先压住 timeout storm，再逐步观察吞吐是否恢复。脚本还会检测异常轮次；如果某轮 `duration > 30s` 或 `retransmissions > 1000`，会自动降低后续探索率。
+当前 DQN 训练默认走低时延吞吐平衡配置：`--epsilon 0.16`、`--window-size 5`、`--max-window 48`、`--reward-throughput-weight 2.1`、`--reward-timeout-weight 16.0`、`--reward-retx-weight 2.5`、`--reward-rtt-weight 0.08`、`--reward-target-rtt-ms 30.0`。RTT 在 30ms 以下不扣分，超过 30ms 的部分才进入 RTT 惩罚；这样会鼓励模型提高吞吐，同时避免排队延迟明显失控。脚本还会检测异常轮次；如果某轮 `duration > 30s` 或 `retransmissions > 1000`，会自动降低后续探索率。
 
 DQN 训练默认同样只输出每轮指标摘要，例如：
 
 ```text
 DQN training:   1%|...| 1/100 [..]
-[DQN-TRAIN] round=1/100 epsilon=0.200 acked=160/160 duration=...s throughput=...Mbps avg_rtt=...ms srtt=...ms retx=... fast=... timeout=... ckpt=artifacts/checkpoints/dqn/...
+[DQN-TRAIN] round=1/100 epsilon=0.160 acked=180/180 duration=...s throughput=...Mbps avg_rtt=...ms srtt=...ms retx=... fast=... timeout=... ckpt=artifacts/checkpoints/dqn/...
 ```
 
 每轮结束后会保存一份模型 checkpoint，并将 round、epsilon、checkpoint、吞吐、RTT、重传等指标追加到 summary CSV。如需观察发送端日志中的 `[SENDER][DQN]` 连续状态、动作编号、CWND 乘数、新 CWND、经验池大小和 reward，可额外加 `--verbose-sender`。训练后的最新模型权重保存在 `artifacts/models/active/dqn_model.pt`。如果只想评估模型而不继续在线训练或覆盖权重，给 `sender.py` 加 `--dqn-eval`。
