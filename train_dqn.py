@@ -175,6 +175,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reward-timeout-weight", type=float, default=18.0)
     parser.add_argument("--reward-retx-weight", type=float, default=3.0)
     parser.add_argument("--reward-rtt-weight", type=float, default=0.004)
+    parser.add_argument("--reward-cwnd-weight", type=float, default=1.0,
+                        help="CWND efficiency bonus: encourages DQN to maintain higher CWND")
     parser.add_argument("--epsilon-decay", type=float, default=0.95)
     parser.add_argument("--min-epsilon", type=float, default=0.02)
     parser.add_argument("--loss-rate", type=float, default=0.02)
@@ -261,6 +263,8 @@ def main() -> None:
         raise SystemExit("--reward-retx-weight must be non-negative")
     if args.reward_rtt_weight < 0:
         raise SystemExit("--reward-rtt-weight must be non-negative")
+    if args.reward_cwnd_weight < 0:
+        raise SystemExit("--reward-cwnd-weight must be non-negative")
     if args.storm_retx_threshold < 0:
         raise SystemExit("--storm-retx-threshold must be non-negative")
     if args.storm_duration_threshold < 0:
@@ -363,6 +367,8 @@ def main() -> None:
                 str(args.reward_retx_weight),
                 "--reward-rtt-weight",
                 str(args.reward_rtt_weight),
+                "--reward-cwnd-weight",
+                str(args.reward_cwnd_weight),
                 "--dqn-model-file",
                 dqn_model,
                 "--dqn-lr",
