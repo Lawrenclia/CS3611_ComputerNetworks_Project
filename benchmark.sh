@@ -10,7 +10,7 @@ kill $RX1_PID
 python3 receiver.py --port 9206 --loss-rate 0.08 --delay-ms 20 --jitter-ms 10 --seed 1 > rx2.log 2>&1 &
 RX2_PID=$!
 sleep 0.5
-python3 sender.py --target-port 9206 --local-port 9306 --packets 120 --window-size 8 --rto 0.20 --cc-mode qlearning --epsilon 0.0 --qtable-file q_table.json > tx2.log 2>&1
+python3 sender.py --target-port 9206 --local-port 9306 --packets 120 --window-size 8 --rto 0.20 --cc-mode qlearning --epsilon 0.0 --q-eval --qtable-file q_table.json > tx2.log 2>&1
 kill $RX2_PID
 
 echo "=== AIMD Baseline ==="
