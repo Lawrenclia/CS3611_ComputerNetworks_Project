@@ -35,6 +35,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--jitter-ms", type=float, default=3.0)
     parser.add_argument("--rto", type=float, default=0.20)
     parser.add_argument("--max-cwnd", type=int, default=64)
+    parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--q-table", default="artifacts/models/active/q_table.json")
+    parser.add_argument("--result-tag", default="")
     parser.add_argument("--include-dqn", choices=("auto", "yes", "no"), default="auto")
     parser.add_argument("--no-open", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -70,7 +73,7 @@ def start_receiver(root: Path, scenario: Scenario, args: argparse.Namespace) -> 
         "--jitter-ms",
         str(args.jitter_ms),
         "--seed",
-        "7",
+        str(args.seed),
     ]
     scenario.receiver_log.parent.mkdir(parents=True, exist_ok=True)
     receiver_log = scenario.receiver_log.open("w", encoding="utf-8")
@@ -150,6 +153,9 @@ def make_scenarios(root: Path, result_dir: Path, args: argparse.Namespace) -> tu
     drop_history = result_dir / "history_drop.csv"
     logs = result_dir / "logs"
     notes: list[str] = []
+    q_table = Path(args.q_table)
+    if not q_table.is_absolute():
+        q_table = root / q_table
 
     scenarios = [
         Scenario(
@@ -175,7 +181,7 @@ def make_scenarios(root: Path, result_dir: Path, args: argparse.Namespace) -> tu
                 "0.0",
                 "--q-eval",
                 "--qtable-file",
-                str(root / "artifacts" / "models" / "active" / "q_table.json"),
+                str(q_table),
             ],
             metrics_file=main_metrics,
             history_file=main_history,
@@ -225,7 +231,7 @@ def make_scenarios(root: Path, result_dir: Path, args: argparse.Namespace) -> tu
                 "0.0",
                 "--q-eval",
                 "--qtable-file",
-                str(root / "artifacts" / "models" / "active" / "q_table.json"),
+                str(q_table),
                 "--link-bandwidth-drop-after-packets",
                 str(max(10, args.packets // 2)),
                 "--link-bandwidth-drop-factor",
@@ -394,7 +400,10 @@ def main() -> None:
         raise SystemExit("--loss-rate must be in [0, 1]")
 
     root = Path(__file__).resolve().parent
-    result_dir = root / "artifacts" / "demo_results" / time.strftime("%Y%m%d-%H%M%S")
+    run_name = time.strftime("%Y%m%d-%H%M%S")
+    if args.result_tag:
+        run_name = f"{run_name}-{args.result_tag}"
+    result_dir = root / "artifacts" / "demo_results" / run_name
     result_dir.mkdir(parents=True, exist_ok=True)
     scenarios, notes = make_scenarios(root, result_dir, args)
 

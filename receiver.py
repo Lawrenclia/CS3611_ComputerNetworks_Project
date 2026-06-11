@@ -22,6 +22,7 @@ def run_receiver(
     delay_ms: float = 0.0,
     jitter_ms: float = 0.0,
     seed: Optional[int] = None,
+    quiet: bool = False,
 ) -> None:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((host, port))
@@ -30,28 +31,31 @@ def run_receiver(
     buffered = set()
     total_bytes = 0
     expected_seq = initial_seq
-    log(
-        "listening on {host}:{port} expected_seq={expected} loss_rate={loss:.3f} "
-        "delay_ms={delay:.1f} jitter_ms={jitter:.1f}".format(
-            host=host,
-            port=port,
-            expected=expected_seq,
-            loss=loss_rate,
-            delay=delay_ms,
-            jitter=jitter_ms,
+    if not quiet:
+        log(
+            "listening on {host}:{port} expected_seq={expected} loss_rate={loss:.3f} "
+            "delay_ms={delay:.1f} jitter_ms={jitter:.1f}".format(
+                host=host,
+                port=port,
+                expected=expected_seq,
+                loss=loss_rate,
+                delay=delay_ms,
+                jitter=jitter_ms,
+            )
         )
-    )
 
     while True:
         packet, address = sock.recvfrom(2048)
         try:
             seq, timestamp, payload = unpack_data_packet(packet)
         except ValueError as exc:
-            log(f"ignore invalid packet from {address}: {exc}")
+            if not quiet:
+                log(f"ignore invalid packet from {address}: {exc}")
             continue
 
         if loss_rate > 0 and rng.random() < loss_rate:
-            log(f"drop seq={seq} from={address[0]}:{address[1]} reason=simulated_loss")
+            if not quiet:
+                log(f"drop seq={seq} from={address[0]}:{address[1]} reason=simulated_loss")
             continue
 
         if delay_ms > 0 or jitter_ms > 0:
@@ -81,22 +85,23 @@ def run_receiver(
         ack_number = expected_seq - 1
         ack = pack_ack(ack_number)
         sock.sendto(ack, address)
-        log(
-            "recv seq={seq} dup={dup} status={status} bytes={size} from={src} ts={ts:.6f} "
-            "cum_ack={ack} expected_seq={expected} buffered={buffered} unique_packets={count} total_payload={total}".format(
-                seq=seq,
-                dup=duplicate,
-                status=status,
-                size=len(payload),
-                src=f"{address[0]}:{address[1]}",
-                ts=timestamp,
-                ack=ack_number,
-                expected=expected_seq,
-                buffered=len(buffered),
-                count=len(seen),
-                total=total_bytes,
+        if not quiet:
+            log(
+                "recv seq={seq} dup={dup} status={status} bytes={size} from={src} ts={ts:.6f} "
+                "cum_ack={ack} expected_seq={expected} buffered={buffered} unique_packets={count} total_payload={total}".format(
+                    seq=seq,
+                    dup=duplicate,
+                    status=status,
+                    size=len(payload),
+                    src=f"{address[0]}:{address[1]}",
+                    ts=timestamp,
+                    ack=ack_number,
+                    expected=expected_seq,
+                    buffered=len(buffered),
+                    count=len(seen),
+                    total=total_bytes,
+                )
             )
-        )
 
 
 def main() -> None:
@@ -108,6 +113,7 @@ def main() -> None:
     parser.add_argument("--delay-ms", type=float, default=0.0)
     parser.add_argument("--jitter-ms", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
     if not 0.0 <= args.loss_rate <= 1.0:
         raise SystemExit("--loss-rate must be in [0, 1]")
@@ -123,6 +129,7 @@ def main() -> None:
         delay_ms=args.delay_ms,
         jitter_ms=args.jitter_ms,
         seed=args.seed,
+        quiet=args.quiet,
     )
 
 

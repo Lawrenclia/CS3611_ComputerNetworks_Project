@@ -287,6 +287,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--jitter-ms", type=float, default=3.0)
     parser.add_argument("--link-service-delay-ms", type=float, default=10.0)
     parser.add_argument("--link-queue-capacity", type=int, default=20)
+    parser.add_argument("--link-bandwidth-drop-after-packets", type=int, default=0)
+    parser.add_argument("--link-bandwidth-drop-factor", type=float, default=0.5)
     parser.add_argument("--metrics-file", default="artifacts/training/qlearning_metrics.csv")
     parser.add_argument("--history-file", default="artifacts/training/qlearning_history.csv")
     parser.add_argument("--checkpoint-dir", default="artifacts/checkpoints/qlearning")
@@ -408,6 +410,15 @@ def build_sender_command(
         "--history-file",
         str(history_file),
     ]
+    if args.link_bandwidth_drop_after_packets > 0:
+        sender_cmd.extend(
+            [
+                "--link-bandwidth-drop-after-packets",
+                str(args.link_bandwidth_drop_after_packets),
+                "--link-bandwidth-drop-factor",
+                str(args.link_bandwidth_drop_factor),
+            ]
+        )
     if q_eval:
         sender_cmd.append("--q-eval")
     if args.quiet_sender or not args.verbose_sender:
@@ -439,6 +450,10 @@ def main() -> None:
         raise SystemExit("--link-service-delay-ms must be non-negative")
     if args.link_queue_capacity <= 0:
         raise SystemExit("--link-queue-capacity must be positive")
+    if args.link_bandwidth_drop_after_packets < 0:
+        raise SystemExit("--link-bandwidth-drop-after-packets must be non-negative")
+    if not 0.0 < args.link_bandwidth_drop_factor <= 1.0:
+        raise SystemExit("--link-bandwidth-drop-factor must be in (0, 1]")
     if args.checkpoint_every <= 0:
         raise SystemExit("--checkpoint-every must be positive")
     if args.reward_throughput_weight < 0:

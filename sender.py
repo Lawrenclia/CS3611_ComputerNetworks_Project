@@ -1109,6 +1109,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--disable-virtual-link", action="store_true")
     parser.add_argument("--min-window", type=float, default=1.0, help=argparse.SUPPRESS)
     parser.add_argument("--q-seed", type=int, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--repeat-rounds", type=int, default=1, help=argparse.SUPPRESS)
+    parser.add_argument("--repeat-epsilon-decay", type=float, default=1.0, help=argparse.SUPPRESS)
+    parser.add_argument("--repeat-min-epsilon", type=float, default=0.0, help=argparse.SUPPRESS)
     parser.add_argument("--reward-alpha", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--reward-beta", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--reward-gamma", type=float, default=None, help=argparse.SUPPRESS)
@@ -1130,6 +1133,17 @@ def main() -> None:
         raise SystemExit("--start-seq must be non-negative")
     if args.start_seq + max(args.packets - 1, 0) > 2_147_483_647:
         raise SystemExit("--start-seq + --packets exceeds signed ACK range")
+    if args.repeat_rounds <= 0:
+        raise SystemExit("--repeat-rounds must be positive")
+    if not 0 < args.repeat_epsilon_decay <= 1:
+        raise SystemExit("--repeat-epsilon-decay must be in (0, 1]")
+    if not 0 <= args.repeat_min_epsilon <= 1:
+        raise SystemExit("--repeat-min-epsilon must be in [0, 1]")
+    final_start_seq = args.start_seq + (args.repeat_rounds - 1) * args.packets
+    if final_start_seq + max(args.packets - 1, 0) > 2_147_483_647:
+        raise SystemExit("repeated sequence range exceeds signed ACK range")
+    if args.local_port + args.repeat_rounds - 1 > 65535:
+        raise SystemExit("repeated local port range exceeds 65535")
     if args.rto <= 0:
         raise SystemExit("--rto must be positive")
     if args.max_cwnd < 1:
@@ -1175,46 +1189,51 @@ def main() -> None:
     if not 0 < args.link_bandwidth_drop_factor <= 1:
         raise SystemExit("--link-bandwidth-drop-factor must be in (0, 1]")
 
-    sender = ReliableSender(
-        target_host=args.target_host,
-        target_port=args.target_port,
-        local_host=args.local_host,
-        local_port=args.local_port,
-        total_packets=args.packets,
-        window_size=args.window_size,
-        rto=args.rto,
-        verbose=not args.quiet,
-        start_seq=args.start_seq,
-        use_virtual_link=not args.disable_virtual_link,
-        link_queue_capacity=args.link_queue_capacity,
-        link_service_delay_ms=args.link_service_delay_ms,
-        link_bandwidth_drop_after_packets=(
-            args.link_bandwidth_drop_after_packets or None
-        ),
-        link_bandwidth_drop_factor=args.link_bandwidth_drop_factor,
-        cc_mode=args.cc_mode,
-        max_cwnd=args.max_cwnd,
-        epsilon=args.epsilon,
-        q_alpha=args.q_alpha,
-        q_gamma=args.q_gamma,
-        reward_throughput_weight=args.reward_throughput_weight,
-        reward_rtt_weight=args.reward_rtt_weight,
-        reward_timeout_weight=args.reward_timeout_weight,
-        reward_retx_weight=args.reward_retx_weight,
-        reward_target_rtt_ms=args.reward_target_rtt_ms,
-        qtable_file=args.qtable_file,
-        dqn_model_file=args.dqn_model_file,
-        dqn_lr=args.dqn_lr,
-        dqn_batch_size=args.dqn_batch_size,
-        dqn_replay_capacity=args.dqn_replay_capacity,
-        dqn_target_update=args.dqn_target_update,
-        dqn_eval=args.dqn_eval,
-        q_eval=args.q_eval,
-        metrics_file=args.metrics_file,
-        history_file=args.history_file,
-        plot_file=args.plot_file,
-    )
-    sender.run()
+    for round_index in range(args.repeat_rounds):
+        epsilon = max(
+            args.repeat_min_epsilon,
+            args.epsilon * (args.repeat_epsilon_decay ** round_index),
+        )
+        sender = ReliableSender(
+            target_host=args.target_host,
+            target_port=args.target_port,
+            local_host=args.local_host,
+            local_port=args.local_port + round_index,
+            total_packets=args.packets,
+            window_size=args.window_size,
+            rto=args.rto,
+            verbose=not args.quiet,
+            start_seq=args.start_seq + round_index * args.packets,
+            use_virtual_link=not args.disable_virtual_link,
+            link_queue_capacity=args.link_queue_capacity,
+            link_service_delay_ms=args.link_service_delay_ms,
+            link_bandwidth_drop_after_packets=(
+                args.link_bandwidth_drop_after_packets or None
+            ),
+            link_bandwidth_drop_factor=args.link_bandwidth_drop_factor,
+            cc_mode=args.cc_mode,
+            max_cwnd=args.max_cwnd,
+            epsilon=epsilon,
+            q_alpha=args.q_alpha,
+            q_gamma=args.q_gamma,
+            reward_throughput_weight=args.reward_throughput_weight,
+            reward_rtt_weight=args.reward_rtt_weight,
+            reward_timeout_weight=args.reward_timeout_weight,
+            reward_retx_weight=args.reward_retx_weight,
+            reward_target_rtt_ms=args.reward_target_rtt_ms,
+            qtable_file=args.qtable_file,
+            dqn_model_file=args.dqn_model_file,
+            dqn_lr=args.dqn_lr,
+            dqn_batch_size=args.dqn_batch_size,
+            dqn_replay_capacity=args.dqn_replay_capacity,
+            dqn_target_update=args.dqn_target_update,
+            dqn_eval=args.dqn_eval,
+            q_eval=args.q_eval,
+            metrics_file=args.metrics_file,
+            history_file=args.history_file,
+            plot_file=args.plot_file if round_index == args.repeat_rounds - 1 else None,
+        )
+        sender.run()
 
 
 if __name__ == "__main__":
