@@ -67,6 +67,7 @@ class CongestionController:
         reward_rtt_weight: float,
         reward_timeout_weight: float,
         reward_retx_weight: float,
+        reward_cwnd_weight: float,
         reward_target_rtt_ms: float | None,
         qtable_file: str | None,
         dqn_model_file: str | None,
@@ -88,6 +89,7 @@ class CongestionController:
         self.reward_rtt_weight = reward_rtt_weight
         self.reward_timeout_weight = reward_timeout_weight
         self.reward_retx_weight = reward_retx_weight
+        self.reward_cwnd_weight = reward_cwnd_weight
         self.reward_target_rtt_ms = reward_target_rtt_ms
         self.qtable_file = Path(qtable_file) if qtable_file else None
         self.dqn_model_file = Path(dqn_model_file) if dqn_model_file else None
@@ -251,6 +253,9 @@ class CongestionController:
     def _step_dqn(self, srtt: float | None) -> tuple[str, object, float, str]:
         state = self._continuous_state(srtt)
         reward = self._reward()
+        # CWND efficiency bonus: reward maintaining higher CWND (only for DQN)
+        # Prevents the "lazy policy" where DQN stays at minimal CWND forever.
+        reward += self.reward_cwnd_weight * (self.cwnd / max(1.0, self.max_cwnd))
         if (
             not self.dqn_eval
             and self.dqn_last_state is not None
@@ -340,7 +345,7 @@ class CongestionController:
                 min(max(rtt_trend_pct / 100.0, -1.0), 1.0),
                 min(max(loss_pct / 100.0, 0.0), 1.0),
                 min(max(timeout_pct / 100.0, 0.0), 1.0),
-                min(max(cwnd / self.max_cwnd, 0.0), 1.0),
+                min(max((cwnd / max(1.0, self.max_cwnd)) ** 0.5, 0.0), 1.0),
                 min(max(ack_ratio / 2.0, 0.0), 1.0),
             ],
             dtype=self.torch.float32,
@@ -577,6 +582,7 @@ class ReliableSender:
         reward_rtt_weight: float = 0.015,
         reward_timeout_weight: float = 10.0,
         reward_retx_weight: float = 2.0,
+        reward_cwnd_weight: float = 0.0,
         reward_target_rtt_ms: float | None = None,
         qtable_file: str | None = "artifacts/models/active/q_table.json",
         dqn_model_file: str | None = "artifacts/models/active/dqn_model.pt",
@@ -630,6 +636,7 @@ class ReliableSender:
             reward_rtt_weight=reward_rtt_weight,
             reward_timeout_weight=reward_timeout_weight,
             reward_retx_weight=reward_retx_weight,
+            reward_cwnd_weight=reward_cwnd_weight,
             reward_target_rtt_ms=reward_target_rtt_ms,
             qtable_file=qtable_file,
             dqn_model_file=dqn_model_file,
@@ -1082,6 +1089,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="only penalize RTT above this target; unset penalizes total average RTT",
     )
+    parser.add_argument(
+        "--reward-cwnd-weight",
+        type=float,
+        default=0.0,
+        help="reward bonus per unit of CWND utilization (cwnd/max_cwnd); encourages DQN to avoid lazy policies",
+    )
     parser.add_argument("--qtable-file", "--q-table", dest="qtable_file", default="artifacts/models/active/q_table.json")
     parser.add_argument(
         "--q-eval",
@@ -1170,6 +1183,8 @@ def main() -> None:
         raise SystemExit("--reward-retx-weight must be non-negative")
     if args.reward_rtt_weight < 0:
         raise SystemExit("--reward-rtt-weight must be non-negative")
+    if args.reward_cwnd_weight < 0:
+        raise SystemExit("--reward-cwnd-weight must be non-negative")
     if args.reward_target_rtt_ms is not None and args.reward_target_rtt_ms < 0:
         raise SystemExit("--reward-target-rtt-ms must be non-negative")
     if args.dqn_lr <= 0:
@@ -1220,6 +1235,7 @@ def main() -> None:
             reward_rtt_weight=args.reward_rtt_weight,
             reward_timeout_weight=args.reward_timeout_weight,
             reward_retx_weight=args.reward_retx_weight,
+            reward_cwnd_weight=args.reward_cwnd_weight,
             reward_target_rtt_ms=args.reward_target_rtt_ms,
             qtable_file=args.qtable_file,
             dqn_model_file=args.dqn_model_file,
