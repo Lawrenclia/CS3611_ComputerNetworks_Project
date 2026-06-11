@@ -100,10 +100,11 @@ class CongestionController:
         self.dqn_eval = dqn_eval
         self.q_eval = q_eval
         self.verbose = verbose
+        self.rtt_trend_threshold_ratio = 0.05
 
         self.q_table = [[0.0, 0.0, 0.0] for _ in Q_STATE_NAMES]
-        self.last_state = 0
-        self.last_action = 0
+        self.last_state: int | None = None
+        self.last_action: int | None = None
         self.last_srtt = None
         self.interval_acked = 0
         self.interval_losses = 0
@@ -159,7 +160,7 @@ class CongestionController:
 
         state = self._state_from_interval(srtt)
         reward = self._reward()
-        if not self.q_eval:
+        if not self.q_eval and self.last_state is not None and self.last_action is not None:
             old = self.q_table[self.last_state][self.last_action]
             best_next = max(self.q_table[state])
             self.q_table[self.last_state][self.last_action] = old + self.alpha * (
@@ -186,6 +187,7 @@ class CongestionController:
                 "metadata": {
                     "state_features": ["rtt_trend", "loss_flag"],
                     "state_count": len(Q_STATE_NAMES),
+                    "rtt_trend_threshold_ratio": self.rtt_trend_threshold_ratio,
                     "actions": {
                         action_key: action_name
                         for action_key, action_name in zip(Q_ACTION_KEYS, Q_ACTION_NAMES)
@@ -222,7 +224,7 @@ class CongestionController:
             trend = 1
         else:
             delta = srtt - self.last_srtt
-            threshold = max(self.last_srtt * 0.05, 0.001)
+            threshold = max(self.last_srtt * self.rtt_trend_threshold_ratio, 0.001)
             if delta > threshold:
                 trend = 0
             elif delta < -threshold:
@@ -487,6 +489,11 @@ class CongestionController:
             rows = self._q_table_rows_from_json(data)
             if rows is not None:
                 self.q_table = rows
+                metadata = data.get("metadata") if isinstance(data, dict) else None
+                if isinstance(metadata, dict):
+                    threshold_ratio = metadata.get("rtt_trend_threshold_ratio")
+                    if isinstance(threshold_ratio, (int, float)) and 0 < threshold_ratio <= 1:
+                        self.rtt_trend_threshold_ratio = float(threshold_ratio)
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             if self.verbose:
                 print("[SENDER][QLEARN] ignore invalid q-table file", flush=True)

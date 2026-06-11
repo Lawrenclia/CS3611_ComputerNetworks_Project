@@ -69,6 +69,7 @@ def seed_q_table(path: Path, backup_dir: Path) -> Path | None:
         "metadata": {
             "state_features": ["rtt_trend", "loss_flag"],
             "state_count": len(Q_STATE_NAMES),
+            "rtt_trend_threshold_ratio": 0.05,
             "actions": {"0": "hold", "1": "cwnd+1", "2": "cwnd/2"},
         }
     }
