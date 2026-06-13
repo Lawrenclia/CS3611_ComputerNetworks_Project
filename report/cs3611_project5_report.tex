@@ -1,3 +1,5 @@
+% !TeX program = xelatex
+% !TeX encoding = UTF-8
 \documentclass[a4paper, 11pt]{article}
 \usepackage[UTF8,fontset=fandol]{ctex}
 \usepackage[top=2.0cm, bottom=2.0cm, left=2.2cm, right=2.2cm]{geometry}
@@ -17,7 +19,8 @@
 \usepackage{tabularx}
 \usepackage{multirow}
 
-\graphicspath{{figures/}}
+% Support builds launched either from the project root or from report/.
+\graphicspath{{report/figures/}{figures/}}
 
 \pagestyle{fancy}
 \fancyhf{}

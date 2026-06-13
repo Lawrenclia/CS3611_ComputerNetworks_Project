@@ -198,6 +198,9 @@ INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/cjk/texinput/UTF8/UTF8.enc
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/cjk/texinput/UTF8/UTF8.enc
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/cjk/texinput/UTF8/UTF8.chr
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/cjk/texinput/UTF8/UTF8.chr
+INPUT ./cs3611_project5_report.aux
+INPUT ./cs3611_project5_report.aux
+INPUT cs3611_project5_report.aux
 OUTPUT cs3611_project5_report.aux
 INPUT /usr/local/texlive/2026/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 INPUT /usr/local/texlive/2026/texmf-dist/tex/context/base/mkii/supp-pdf.mkii

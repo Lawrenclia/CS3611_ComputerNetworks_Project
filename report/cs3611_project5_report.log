@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.4.27)  13 JUN 2026 10:27
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.4.27)  13 JUN 2026 10:28
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -690,8 +690,7 @@ Package hyperref Info: Option `colorlinks' set `true' on input line 58.
 File: UTF8.enc 2021/10/16 4.8.5
 ) (/usr/local/texlive/2026/texmf-dist/tex/latex/cjk/texinput/UTF8/UTF8.chr
 File: UTF8.chr 2021/10/16 4.8.5
-)
-No file cs3611_project5_report.aux.
+) (./cs3611_project5_report.aux)
 \openout1 = `cs3611_project5_report.aux'.
 
 LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 64.
@@ -776,6 +775,7 @@ LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 64.
 LaTeX Font Info:    ... okay on input line 64.
 LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 64.
 LaTeX Font Info:    ... okay on input line 64.
+
 *geometry* driver: auto-detecting
 *geometry* detected driver: pdftex
 *geometry* verbose mode - [ preamble ] result:
@@ -975,10 +975,10 @@ Package rerunfilecheck Info: Checksums for `cs3611_project5_report.out':
 (rerunfilecheck)             After:  6E182A055454E2A76DC3A89C49791848;1967.
  ) 
 Here is how much of TeX's memory you used:
- 20117 strings out of 467525
- 327982 string characters out of 5418982
- 1103094 words of memory out of 5000000
- 48192 multiletter control sequences out of 15000+600000
+ 20120 strings out of 467525
+ 328075 string characters out of 5418982
+ 1103085 words of memory out of 5000000
+ 48193 multiletter control sequences out of 15000+600000
  745207 words of font info for 474 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  78i,15n,92p,865b,2079s stack positions out of 10000i,1000n,20000p,200000b,200000s
