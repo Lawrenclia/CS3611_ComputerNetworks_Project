@@ -69,7 +69,7 @@ DQN_DELAY_DEADBAND = 0.40
 # saturation extra ACKs add almost nothing - so there is no reward for over-
 # driving CWND, only the delay/loss it causes.
 DQN_ACK_SATURATION = 1.5
-DQN_ARCH = "dueling_dqn_v4"
+DQN_ARCH = "dueling_dqn_v5"
 DQN_WARM_START_SAMPLES = 4096
 DQN_WARM_START_EPOCHS = 160
 
@@ -179,6 +179,8 @@ class CongestionController:
             self._init_dqn()
 
     def window_limit(self) -> int:
+        if self.mode == "dqn":
+            return max(1, int(self.cwnd + 0.70))
         return max(1, int(self.cwnd))
 
     def on_ack(self, newly_acked: int, latest_rtt: float | None) -> None:
@@ -469,7 +471,7 @@ class CongestionController:
                 min(max(rtt_trend_pct / 100.0, -1.0), 1.0),
                 min(max(loss_pct / 100.0, 0.0), 1.0),
                 min(max(timeout_pct / 100.0, 0.0), 1.0),
-                min(max((cwnd / max(1.0, self.max_cwnd)) ** 0.5, 0.0), 1.0),
+                min(max(cwnd / max(1.0, DQN_MAX_OPERATING_CWND), 0.0), 1.0),
                 min(max(ack_ratio / 2.0, 0.0), 1.0),
             ],
             dtype=self.torch.float32,
@@ -483,7 +485,7 @@ class CongestionController:
 
     def _choose_dqn_action(self, state: tuple[float, ...]) -> int:
         valid_actions = list(range(len(DQN_ACTION_MULTIPLIERS)))
-        if self.cwnd < DQN_PROBE_FLOOR - 1e-6:
+        if self.cwnd <= DQN_MIN_CWND + 1e-6:
             valid_actions = [
                 index
                 for index in valid_actions
@@ -646,17 +648,49 @@ class CongestionController:
         torch = self.torch
         generator = torch.Generator().manual_seed(3611)
         count = DQN_WARM_START_SAMPLES
-        raw = torch.rand((count, len(DQN_STATE_FEATURES)), generator=generator)
+        per_action = count // len(DQN_ACTION_MULTIPLIERS)
 
-        queue_delay = raw[:, 0] * 1.5
-        rtt_trend = raw[:, 1] * 100.0 - 40.0
-        loss_pct = raw[:, 2] * 20.0
-        timeout_pct = raw[:, 3] * 12.0
-        cwnd = DQN_MIN_CWND + raw[:, 4] * min(
-            14.0,
-            max(DQN_MIN_CWND, self.max_cwnd - DQN_MIN_CWND),
+        def samples(
+            queue_range: tuple[float, float],
+            trend_range: tuple[float, float],
+            loss_range: tuple[float, float],
+            timeout_range: tuple[float, float],
+            cwnd_range: tuple[float, float],
+            ack_range: tuple[float, float],
+        ):
+            raw = torch.rand(
+                (per_action, len(DQN_STATE_FEATURES)),
+                generator=generator,
+            )
+            ranges = (
+                queue_range,
+                trend_range,
+                loss_range,
+                timeout_range,
+                cwnd_range,
+                ack_range,
+            )
+            columns = [
+                low + raw[:, index] * (high - low)
+                for index, (low, high) in enumerate(ranges)
+            ]
+            return torch.stack(columns, dim=1)
+
+        raw_states = torch.cat(
+            (
+                samples((0.35, 1.50), (5.0, 60.0), (10.0, 20.0), (5.0, 12.0), (3.0, 4.0), (0.0, 1.0)),
+                samples((0.30, 0.90), (3.0, 35.0), (0.0, 8.0), (0.0, 3.0), (3.3, 4.0), (0.2, 1.3)),
+                samples((0.05, 0.35), (-8.0, 6.0), (0.0, 2.0), (0.0, 0.5), (3.4, 4.0), (0.5, 1.5)),
+                samples((0.00, 0.20), (-20.0, 4.0), (0.0, 1.0), (0.0, 0.2), (3.0, 3.5), (0.3, 1.2)),
+            ),
+            dim=0,
         )
-        ack_ratio = raw[:, 5] * 2.5
+        queue_delay = raw_states[:, 0]
+        rtt_trend = raw_states[:, 1]
+        loss_pct = raw_states[:, 2]
+        timeout_pct = raw_states[:, 3]
+        cwnd = raw_states[:, 4]
+        ack_ratio = raw_states[:, 5]
 
         states = torch.stack(
             (
@@ -664,20 +698,19 @@ class CongestionController:
                 (rtt_trend / 100.0).clamp(-1.0, 1.0),
                 (loss_pct / 100.0).clamp(0.0, 1.0),
                 (timeout_pct / 100.0).clamp(0.0, 1.0),
-                (cwnd / max(1.0, self.max_cwnd)).sqrt().clamp(0.0, 1.0),
+                (cwnd / max(1.0, DQN_MAX_OPERATING_CWND)).clamp(0.0, 1.0),
                 (ack_ratio / 2.0).clamp(0.0, 1.0),
             ),
             dim=1,
         )
 
-        targets = torch.full((count,), 2, dtype=torch.int64)
-        severe = (timeout_pct >= 2.0) | (loss_pct >= 6.0)
-        congested = (queue_delay >= 0.50) | (rtt_trend >= 12.0)
-        underfilled = (cwnd < 3.5) & ~severe & ~congested
-        above_knee = (cwnd >= 5.5) | ((cwnd >= 4.2) & (rtt_trend >= 2.0))
-        targets[congested | above_knee] = 1
-        targets[severe] = 0
-        targets[underfilled] = 3
+        targets = torch.arange(
+            len(DQN_ACTION_MULTIPLIERS),
+            dtype=torch.int64,
+        ).repeat_interleave(per_action)
+        permutation = torch.randperm(count, generator=generator)
+        states = states[permutation]
+        targets = targets[permutation]
 
         optimizer = torch.optim.Adam(self.dqn_policy.parameters(), lr=0.003)
         loss_fn = torch.nn.CrossEntropyLoss()

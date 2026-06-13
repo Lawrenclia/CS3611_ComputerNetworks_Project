@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DQN_MODEL = sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "artifacts/models/active/dqn_smoke.pt")
 SEED = sys.argv[2] if len(sys.argv) > 2 else "7"
-PACKETS = 300
+PACKETS = int(sys.argv[3]) if len(sys.argv) > 3 else 300
 COND = dict(loss="0.02", delay="10", jitter="3", rto="0.20", maxcwnd="64", service="10", queue="20", seed=SEED)
 OUT = ROOT / "artifacts/training/cmp_metrics.csv"
 HIST = ROOT / "artifacts/training/cmp_history.csv"
