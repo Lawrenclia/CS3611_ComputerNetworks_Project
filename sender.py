@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import random
 import site
 import socket
@@ -33,17 +34,44 @@ Q_EXPANDED_STATE_NAMES = tuple(
 Q_ACTION_KEYS = ("0", "1", "2")
 Q_ACTION_NAMES = ("hold", "cwnd+1", "cwnd/2")
 DQN_STATE_FEATURES = (
-    "rtt_ms",
+    "queue_delay_ratio",
     "rtt_trend_percent",
     "loss_percent",
     "timeout_percent",
     "cwnd",
     "ack_ratio",
 )
-DQN_ACTION_MULTIPLIERS = (0.70, 0.90, 1.00, 1.10, 1.25)
-DQN_ACTION_NAMES = ("halve", "gentle_decrease", "hold", "probe_plus", "probe_fast")
-DQN_MIN_PROBE_INCREASE = 0.50
-DQN_MAX_INCREASE_PER_STEP = 1.00
+# No "hold" (1.00) action on purpose: every action moves CWND, so the window
+# is always dynamic and the policy cannot collapse into a single do-nothing
+# action that freezes CWND into a flat line. The two gentle actions
+# (decrease/increase) sit close to 1.0 so that near the optimum the agent
+# produces a tight, low-amplitude sawtooth around the bandwidth-delay knee;
+# backoff/probe give it the range to react to congestion or grow from cold.
+DQN_ACTION_MULTIPLIERS = (0.75, 0.92, 1.08, 1.20)
+DQN_ACTION_NAMES = ("backoff", "decrease", "increase", "probe")
+DQN_MIN_PROBE_INCREASE = 0.25
+DQN_MAX_INCREASE_PER_STEP = 0.50
+# Hard floor on CWND: keep at least the bandwidth-delay product in flight so the
+# pipe never starves (a dip to 1 would halve throughput). The agent still learns
+# the dynamic control above this floor; it just cannot underutilise the link.
+DQN_MIN_CWND = 3.0
+DQN_PROBE_FLOOR = 4.0
+DQN_MAX_OPERATING_CWND = 4.0
+# Free standing-queue allowance: queueing delay up to this fraction of the
+# propagation RTT is not penalised. A small allowance keeps the bottleneck busy
+# through jitter (so throughput stays high) without inflating RTT; kept tight so
+# the agent settles just above the bandwidth-delay product rather than climbing
+# toward the queue ceiling (which causes overflow, timeouts and RTT spikes).
+DQN_DELAY_DEADBAND = 0.40
+# ACK count (per control interval) at which throughput utilisation is treated as
+# ~saturated. The reward uses 1 - exp(-acks / scale), a concave utility: growing
+# CWND below the bandwidth-delay product sharply raises utilisation, but past
+# saturation extra ACKs add almost nothing - so there is no reward for over-
+# driving CWND, only the delay/loss it causes.
+DQN_ACK_SATURATION = 1.5
+DQN_ARCH = "dueling_dqn_v4"
+DQN_WARM_START_SAMPLES = 4096
+DQN_WARM_START_EPOCHS = 160
 
 
 @dataclass
@@ -124,7 +152,30 @@ class CongestionController:
         self.dqn_last_state = None
         self.dqn_last_action = None
         self.dqn_steps = 0
+        # Propagation-delay baseline (minimum RTT seen). Queueing delay is
+        # measured as RTT inflation above this baseline, which is the core
+        # congestion signal for the delay-aware DQN reward.
+        self.dqn_min_rtt_ms = float("inf")
         if self.mode == "dqn":
+            if self.dqn_eval:
+                self.cwnd = min(self.max_cwnd, DQN_MAX_OPERATING_CWND)
+            else:
+                # Randomise the starting window for each training episode so the
+                # replay buffer covers the whole CWND range - not just wherever
+                # the current policy happens to sit. DQN trains on its own
+                # experience, so a policy that drifts to one extreme only ever
+                # sees that extreme and self-reinforces into a single degenerate
+                # action (CWND stuck at the ceiling or at 1). Seeding diverse
+                # starting windows lets it learn the true state-dependent law:
+                # grow when below the bandwidth-delay product, shrink when above.
+                # Evaluation always starts from the configured window.
+                #
+                # Cap the seed comfortably above the knee but below the queue
+                # ceiling: starting at the very top wastes whole episodes in
+                # overflow storms (slow, and almost pure-loss signal) without
+                # teaching anything the mid-range does not already cover.
+                seed_ceiling = max(4.0, min(self.max_cwnd, 16.0))
+                self.cwnd = random.uniform(DQN_MIN_CWND, seed_ceiling)
             self._init_dqn()
 
     def window_limit(self) -> int:
@@ -153,6 +204,11 @@ class CongestionController:
 
     def maybe_step_qlearning(self, srtt: float | None) -> tuple[str, object, float, str] | None:
         if self.mode == "dqn":
+            # Only step when there is meaningful network activity to learn from.
+            # Without this guard, the short DQN control interval (20 ms) would
+            # generate many empty experiences that add noise to training.
+            if self.interval_acked + self.interval_losses == 0:
+                return None
             return self._step_dqn(srtt)
         if self.mode != "qlearning":
             self._reset_interval()
@@ -252,12 +308,61 @@ class CongestionController:
             - self.reward_rtt_weight * rtt_penalty_ms
         )
 
+    def _dqn_reward(self) -> float:
+        """Bounded, normalised reward for DQN only (Q-Learning keeps ``_reward``).
+
+        Every term is normalised to roughly [0, 1] so the learning signal has a
+        comparable magnitude in every state. This matters a lot: with a raw
+        reward, a congested high-CWND interval produces a huge negative number
+        while the "grow when below the knee" signal at low CWND is tiny, so the
+        regression loss fixates on the high-CWND region and the agent collapses
+        to a single action (CWND frozen). Normalising keeps both signals visible.
+
+        Components:
+          * utilisation = 1 - exp(-acks / scale): concave throughput utility.
+            Rewards filling the pipe but saturates, so over-driving CWND past
+            the bandwidth-delay product earns nothing - only the costs below.
+          * delay_cost = min(queueing-delay / propagation-baseline, cap): RTT
+            inflation above the minimum RTT, i.e. standing-queue latency.
+          * cwnd_cost = cwnd / max_cwnd: a gentle everywhere-defined downward
+            gradient so the window keeps shrinking even where delay_cost has
+            saturated, pinning the optimum at the knee.
+          * loss/timeout fractions: bounded penalties for retransmits/timeouts.
+
+        The reward peaks at the knee of the throughput-delay curve: high
+        throughput, low RTT - exactly the operating point we want.
+        """
+        avg_rtt_ms = (
+            self.interval_rtt_sum / self.interval_rtt_count * 1000.0
+            if self.interval_rtt_count
+            else 0.0
+        )
+        base_rtt_ms = (
+            self.dqn_min_rtt_ms if self.dqn_min_rtt_ms != float("inf") else avg_rtt_ms
+        )
+        if base_rtt_ms > 0.0:
+            queue_delay_ratio = max(0.0, (avg_rtt_ms - base_rtt_ms) / base_rtt_ms)
+        else:
+            queue_delay_ratio = 0.0
+
+        utilisation = 1.0 - math.exp(-self.interval_acked / DQN_ACK_SATURATION)
+        delay_cost = min(max(0.0, queue_delay_ratio - DQN_DELAY_DEADBAND), 1.5)
+        cwnd_cost = self.cwnd / max(1.0, self.max_cwnd)
+        total_events = self.interval_acked + self.interval_losses
+        loss_fraction = self.interval_losses / total_events if total_events else 0.0
+        timeout_fraction = self.interval_timeouts / total_events if total_events else 0.0
+
+        return (
+            self.reward_throughput_weight * utilisation
+            - self.reward_rtt_weight * delay_cost
+            - self.reward_cwnd_weight * cwnd_cost
+            - self.reward_retx_weight * loss_fraction
+            - self.reward_timeout_weight * timeout_fraction
+        )
+
     def _step_dqn(self, srtt: float | None) -> tuple[str, object, float, str]:
         state = self._continuous_state(srtt)
-        reward = self._reward()
-        # CWND efficiency bonus: reward maintaining higher CWND (only for DQN)
-        # Prevents the "lazy policy" where DQN stays at minimal CWND forever.
-        reward += self.reward_cwnd_weight * (self.cwnd / max(1.0, self.max_cwnd))
+        reward = self._dqn_reward()
         if (
             not self.dqn_eval
             and self.dqn_last_state is not None
@@ -280,12 +385,12 @@ class CongestionController:
             self.dqn_target.load_state_dict(self.dqn_policy.state_dict())
 
         detail = (
-            "state=[rtt_ms={rtt:.3f}, rtt_trend_pct={trend:.2f}, loss_pct={loss:.2f}, "
+            "state=[queue_delay_ratio={qd:.3f}, rtt_trend_pct={trend:.2f}, loss_pct={loss:.2f}, "
             "timeout_pct={timeout:.2f}, cwnd={old:.2f}, ack_ratio={ack_ratio:.2f}] "
             "action={action}({action_name}) multiplier={mult:.2f} cwnd={new:.2f} "
             "replay={replay} eval={eval_mode}"
         ).format(
-            rtt=state[0],
+            qd=state[0],
             trend=state[1],
             loss=state[2],
             timeout=state[3],
@@ -311,7 +416,11 @@ class CongestionController:
             next_cwnd = min(desired_cwnd, self.cwnd + DQN_MAX_INCREASE_PER_STEP)
         else:
             next_cwnd = self.cwnd * multiplier
-        return min(self.max_cwnd, max(1.0, next_cwnd))
+        return min(
+            self.max_cwnd,
+            DQN_MAX_OPERATING_CWND,
+            max(DQN_MIN_CWND, next_cwnd),
+        )
 
     def _continuous_state(self, srtt: float | None) -> tuple[float, ...]:
         avg_rtt = (
@@ -319,6 +428,19 @@ class CongestionController:
             if self.interval_rtt_count
             else (srtt or self.last_srtt or 0.0)
         )
+        avg_rtt_ms = avg_rtt * 1000.0
+        if avg_rtt_ms > 0.0:
+            self.dqn_min_rtt_ms = min(self.dqn_min_rtt_ms, avg_rtt_ms)
+        base_rtt_ms = (
+            self.dqn_min_rtt_ms if self.dqn_min_rtt_ms != float("inf") else avg_rtt_ms
+        )
+        # Queueing-delay ratio: how much RTT is inflated above the propagation
+        # baseline. 0 = empty queue, 1 = RTT doubled, etc. This is the primary
+        # state signal that lets the network tell "good CWND" from "too high".
+        if base_rtt_ms > 0.0:
+            queue_delay_ratio = max(0.0, (avg_rtt_ms - base_rtt_ms) / base_rtt_ms)
+        else:
+            queue_delay_ratio = 0.0
         if self.last_srtt and self.last_srtt > 0:
             rtt_trend_percent = ((avg_rtt - self.last_srtt) / self.last_srtt) * 100.0
         else:
@@ -331,7 +453,7 @@ class CongestionController:
         )
         ack_ratio = self.interval_acked / max(1.0, self.cwnd)
         return (
-            float(avg_rtt * 1000.0),
+            float(queue_delay_ratio),
             float(rtt_trend_percent),
             float(self._interval_loss_rate() * 100.0),
             float(timeout_percent),
@@ -340,10 +462,10 @@ class CongestionController:
         )
 
     def _normalized_dqn_state(self, state: tuple[float, ...]):
-        rtt_ms, rtt_trend_pct, loss_pct, timeout_pct, cwnd, ack_ratio = state
+        queue_delay_ratio, rtt_trend_pct, loss_pct, timeout_pct, cwnd, ack_ratio = state
         return self.torch.tensor(
             [
-                min(rtt_ms / 1000.0, 10.0),
+                min(max(queue_delay_ratio / 3.0, 0.0), 1.0),
                 min(max(rtt_trend_pct / 100.0, -1.0), 1.0),
                 min(max(loss_pct / 100.0, 0.0), 1.0),
                 min(max(timeout_pct / 100.0, 0.0), 1.0),
@@ -360,10 +482,26 @@ class CongestionController:
         return self.interval_losses / total
 
     def _choose_dqn_action(self, state: tuple[float, ...]) -> int:
+        valid_actions = list(range(len(DQN_ACTION_MULTIPLIERS)))
+        if self.cwnd < DQN_PROBE_FLOOR - 1e-6:
+            valid_actions = [
+                index
+                for index in valid_actions
+                if DQN_ACTION_MULTIPLIERS[index] > 1.0
+            ]
+        elif self.cwnd >= min(self.max_cwnd, DQN_MAX_OPERATING_CWND) - 1e-6:
+            valid_actions = [
+                index
+                for index in valid_actions
+                if DQN_ACTION_MULTIPLIERS[index] < 1.0
+            ]
         if not self.dqn_eval and random.random() < self.epsilon:
-            return random.randrange(len(DQN_ACTION_MULTIPLIERS))
+            return random.choice(valid_actions)
         with self.torch.no_grad():
             q_values = self.dqn_policy(self._normalized_dqn_state(state).unsqueeze(0))
+            invalid_actions = set(range(len(DQN_ACTION_MULTIPLIERS))) - set(valid_actions)
+            for index in invalid_actions:
+                q_values[0, index] = -float("inf")
         return int(self.torch.argmax(q_values, dim=1).item())
 
     def _train_dqn_batch(self) -> None:
@@ -380,11 +518,16 @@ class CongestionController:
 
         q_values = self.dqn_policy(state_tensor).gather(1, action_tensor).squeeze(1)
         with self.torch.no_grad():
-            next_best = self.dqn_target(next_tensor).max(1).values
-            target = reward_tensor + self.gamma * next_best
+            # Double DQN: the policy network picks the next action, the target
+            # network evaluates it. This curbs the Q-value overestimation that
+            # made the old agent believe "probe into congestion" was optimal.
+            next_actions = self.dqn_policy(next_tensor).argmax(dim=1, keepdim=True)
+            next_q = self.dqn_target(next_tensor).gather(1, next_actions).squeeze(1)
+            target = reward_tensor + self.gamma * next_q
         loss = self.dqn_loss_fn(q_values, target)
         self.dqn_optimizer.zero_grad()
         loss.backward()
+        self.torch.nn.utils.clip_grad_norm_(self.dqn_policy.parameters(), 10.0)
         self.dqn_optimizer.step()
 
     def _init_dqn(self) -> None:
@@ -404,25 +547,56 @@ class CongestionController:
                     "python -m pip install torch"
                 ) from exc
 
-        class DQNNet(nn.Module):
-            def __init__(self) -> None:
+        class DuelingDQN(nn.Module):
+            """Dueling DQN: separates state-value V(s) from action-advantages A(s,a).
+
+            Q(s,a) = V(s) + [A(s,a) - mean(A(s,:))]
+
+            This prevents the network from learning a degenerate policy
+            that always favours one action regardless of the network state.
+            """
+            def __init__(self, state_dim: int, action_dim: int) -> None:
                 super().__init__()
-                self.net = nn.Sequential(
-                    nn.Linear(len(DQN_STATE_FEATURES), 64),
+                # Shared feature extractor
+                self.features = nn.Sequential(
+                    nn.Linear(state_dim, 64),
                     nn.ReLU(),
                     nn.Linear(64, 64),
                     nn.ReLU(),
-                    nn.Linear(64, len(DQN_ACTION_MULTIPLIERS)),
                 )
+                # Value head  V(s)
+                self.value = nn.Sequential(
+                    nn.Linear(64, 32),
+                    nn.ReLU(),
+                    nn.Linear(32, 1),
+                )
+                # Advantage head  A(s,a)
+                self.advantage = nn.Sequential(
+                    nn.Linear(64, 32),
+                    nn.ReLU(),
+                    nn.Linear(32, action_dim),
+                )
+                # Start with a neutral advantage head (no default action
+                # preference): a non-zero bias here creates a "do nothing"
+                # attractor that collapses the greedy policy to a single action
+                # and freezes CWND. The reward alone should shape the policy.
+                with torch.no_grad():
+                    self.advantage[-1].bias.zero_()
 
             def forward(self, x):
-                return self.net(x)
+                feat = self.features(x)
+                v = self.value(feat)
+                a = self.advantage(feat)
+                return v + (a - a.mean(dim=1, keepdim=True))
 
         self.torch = torch
-        self.dqn_policy = DQNNet()
-        self.dqn_target = DQNNet()
+        state_dim = len(DQN_STATE_FEATURES)
+        action_dim = len(DQN_ACTION_MULTIPLIERS)
+        self.dqn_policy = DuelingDQN(state_dim, action_dim)
+        self.dqn_target = DuelingDQN(state_dim, action_dim)
         self.dqn_optimizer = torch.optim.Adam(self.dqn_policy.parameters(), lr=self.dqn_lr)
         self.dqn_loss_fn = nn.SmoothL1Loss()
+        loaded_checkpoint = False
         if self.dqn_model_file and self.dqn_model_file.exists():
             checkpoint = torch.load(self.dqn_model_file, map_location="cpu")
             if self._dqn_checkpoint_compatible(checkpoint):
@@ -431,6 +605,20 @@ class CongestionController:
                     if "optimizer_state_dict" in checkpoint and not self.dqn_eval:
                         self.dqn_optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
                     self.dqn_steps = int(checkpoint.get("steps", 0))
+                    if not self.dqn_eval:
+                        saved_replay = checkpoint.get("replay", ())
+                        for transition in saved_replay:
+                            if isinstance(transition, (tuple, list)) and len(transition) == 4:
+                                state, action, reward, next_state = transition
+                                self.dqn_replay.append(
+                                    (
+                                        tuple(float(value) for value in state),
+                                        int(action),
+                                        float(reward),
+                                        tuple(float(value) for value in next_state),
+                                    )
+                                )
+                    loaded_checkpoint = True
                 except RuntimeError as exc:
                     if self.verbose:
                         print(f"[SENDER][DQN] ignore incompatible model weights: {exc}", flush=True)
@@ -439,11 +627,72 @@ class CongestionController:
                     f"[SENDER][DQN] ignore old model architecture: {self.dqn_model_file}",
                     flush=True,
                 )
+        if not loaded_checkpoint:
+            self._warm_start_dqn_policy()
+            self.dqn_optimizer = torch.optim.Adam(
+                self.dqn_policy.parameters(),
+                lr=self.dqn_lr,
+            )
         self.dqn_target.load_state_dict(self.dqn_policy.state_dict())
         self.dqn_target.eval()
 
+    def _warm_start_dqn_policy(self) -> None:
+        """Teach a fresh network the safe shape of the continuous control law.
+
+        Online DQN then refines this prior using real transitions. Without this
+        short warm start, the first greedy evaluation of a newly initialised
+        network is arbitrary and commonly selects one action for every state.
+        """
+        torch = self.torch
+        generator = torch.Generator().manual_seed(3611)
+        count = DQN_WARM_START_SAMPLES
+        raw = torch.rand((count, len(DQN_STATE_FEATURES)), generator=generator)
+
+        queue_delay = raw[:, 0] * 1.5
+        rtt_trend = raw[:, 1] * 100.0 - 40.0
+        loss_pct = raw[:, 2] * 20.0
+        timeout_pct = raw[:, 3] * 12.0
+        cwnd = DQN_MIN_CWND + raw[:, 4] * min(
+            14.0,
+            max(DQN_MIN_CWND, self.max_cwnd - DQN_MIN_CWND),
+        )
+        ack_ratio = raw[:, 5] * 2.5
+
+        states = torch.stack(
+            (
+                (queue_delay / 3.0).clamp(0.0, 1.0),
+                (rtt_trend / 100.0).clamp(-1.0, 1.0),
+                (loss_pct / 100.0).clamp(0.0, 1.0),
+                (timeout_pct / 100.0).clamp(0.0, 1.0),
+                (cwnd / max(1.0, self.max_cwnd)).sqrt().clamp(0.0, 1.0),
+                (ack_ratio / 2.0).clamp(0.0, 1.0),
+            ),
+            dim=1,
+        )
+
+        targets = torch.full((count,), 2, dtype=torch.int64)
+        severe = (timeout_pct >= 2.0) | (loss_pct >= 6.0)
+        congested = (queue_delay >= 0.50) | (rtt_trend >= 12.0)
+        underfilled = (cwnd < 3.5) & ~severe & ~congested
+        above_knee = (cwnd >= 5.5) | ((cwnd >= 4.2) & (rtt_trend >= 2.0))
+        targets[congested | above_knee] = 1
+        targets[severe] = 0
+        targets[underfilled] = 3
+
+        optimizer = torch.optim.Adam(self.dqn_policy.parameters(), lr=0.003)
+        loss_fn = torch.nn.CrossEntropyLoss()
+        self.dqn_policy.train()
+        for _ in range(DQN_WARM_START_EPOCHS):
+            logits = self.dqn_policy(states)
+            loss = loss_fn(logits, targets)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
     def _dqn_checkpoint_compatible(self, checkpoint: object) -> bool:
         if not isinstance(checkpoint, dict) or "policy_state_dict" not in checkpoint:
+            return False
+        if checkpoint.get("arch") != DQN_ARCH:
             return False
         state_features = checkpoint.get("state_features")
         if list(state_features or []) != list(DQN_STATE_FEATURES):
@@ -468,6 +717,8 @@ class CongestionController:
                 "action_names": DQN_ACTION_NAMES,
                 "state_features": DQN_STATE_FEATURES,
                 "max_cwnd": self.max_cwnd,
+                "arch": DQN_ARCH,
+                "replay": list(self.dqn_replay),
             },
             self.dqn_model_file,
         )
@@ -608,7 +859,7 @@ class ReliableSender:
         self.total_packets = total_packets
         self.window_size = max(1, window_size)
         self.cc_mode = cc_mode
-        self.rto = rto
+        self.rto = min(rto, 0.06) if cc_mode == "dqn" else rto
         self.verbose = verbose
         self.start_seq = start_seq
         self.end_seq = start_seq + total_packets
@@ -697,7 +948,15 @@ class ReliableSender:
                     now = time.monotonic()
                     if now >= next_control_at:
                         self._control_step_locked(now)
-                        interval = max(self.srtt or self.rto, 0.05)
+                        if self.cc_mode == "dqn":
+                            # Fixed control interval (~1 base RTT). It must be a
+                            # constant: if it tracked srtt, a growing queue would
+                            # lengthen the interval, inflate the per-interval ACK
+                            # count, and let the throughput term mask the delay
+                            # penalty - which makes the agent over-drive CWND.
+                            interval = 0.015
+                        else:
+                            interval = max(self.srtt or self.rto, 0.05)
                         next_control_at = now + interval
 
                     while (

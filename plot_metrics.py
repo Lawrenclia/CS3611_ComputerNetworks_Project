@@ -85,7 +85,8 @@ def plot(
         try:
             import matplotlib.pyplot as plt
         except ImportError:
-            raise SystemExit("matplotlib is required for comparison plotting") from exc
+            plot_with_pillow(metrics, histories, output, smooth_window)
+            return
 
     modes = [row["mode"] for row in metrics]
     throughput = [float(row["throughput_mbps"]) for row in metrics]
@@ -181,6 +182,113 @@ def plot(
     fig.savefig(bars_output, dpi=140)
     plt.close(fig)
     print(f"saved {bars_output}")
+
+
+def plot_with_pillow(
+    metrics: list[dict[str, str]],
+    histories: dict[str, list[dict[str, str]]],
+    output: Path,
+    smooth_window: int,
+) -> None:
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError as exc:
+        raise SystemExit("matplotlib or Pillow is required for comparison plotting") from exc
+
+    colors = {
+        "aimd": "#2563eb",
+        "qlearning": "#f59e0b",
+        "dqn": "#16a34a",
+        "fixed": "#7c3aed",
+    }
+    font = ImageFont.load_default()
+
+    def draw_axes(draw, box, title, x_label, y_label):
+        left, top, right, bottom = box
+        draw.rectangle(box, outline="#94a3b8", width=1)
+        draw.text((left, top - 22), title, fill="#0f172a", font=font)
+        draw.text(((left + right) // 2 - 25, bottom + 10), x_label, fill="#334155", font=font)
+        draw.text((8, (top + bottom) // 2), y_label, fill="#334155", font=font)
+
+    def draw_cwnd(image, box):
+        draw = ImageDraw.Draw(image)
+        draw_axes(draw, box, "CWND over time", "Time (s)", "CWND")
+        left, top, right, bottom = box
+        all_times = [float(row["time_s"]) for rows in histories.values() for row in rows]
+        all_cwnds = [float(row["cwnd"]) for rows in histories.values() for row in rows]
+        max_time = max(all_times, default=1.0)
+        min_cwnd = min(all_cwnds, default=0.0)
+        max_cwnd = max(all_cwnds, default=1.0)
+        span = max(max_cwnd - min_cwnd, 1.0)
+        legend_x = right - 110
+        legend_y = top + 10
+        for index, (mode, rows) in enumerate(histories.items()):
+            times = [float(row["time_s"]) for row in rows]
+            cwnds = [float(row["cwnd"]) for row in rows]
+            if should_smooth_cwnd(mode, smooth_window, len(cwnds)):
+                cwnds = moving_average(cwnds, smooth_window)
+            points = [
+                (
+                    left + int((value / max_time) * (right - left)),
+                    bottom - int(((cwnd - min_cwnd) / span) * (bottom - top)),
+                )
+                for value, cwnd in zip(times, cwnds)
+            ]
+            color = colors.get(mode.lower().replace("-", ""), "#64748b")
+            if len(points) >= 2:
+                draw.line(points, fill=color, width=3)
+            draw.line((legend_x, legend_y + index * 18 + 6, legend_x + 22, legend_y + index * 18 + 6), fill=color, width=3)
+            draw.text((legend_x + 28, legend_y + index * 18), mode, fill="#0f172a", font=font)
+
+    def draw_bars(image, box):
+        draw = ImageDraw.Draw(image)
+        draw_axes(draw, box, "Throughput and average RTT", "Controller", "Value")
+        left, top, right, bottom = box
+        count = max(len(metrics), 1)
+        group_width = (right - left) / count
+        max_throughput = max((float(row["throughput_mbps"]) for row in metrics), default=1.0)
+        max_rtt = max((float(row["avg_rtt_ms"]) for row in metrics), default=1.0)
+        for index, row in enumerate(metrics):
+            center = left + group_width * (index + 0.5)
+            throughput = float(row["throughput_mbps"])
+            rtt = float(row["avg_rtt_ms"])
+            bar_width = max(12, int(group_width * 0.20))
+            throughput_height = int((throughput / max_throughput) * (bottom - top - 25))
+            rtt_height = int((rtt / max_rtt) * (bottom - top - 25))
+            draw.rectangle(
+                (int(center - bar_width - 2), bottom - throughput_height, int(center - 2), bottom),
+                fill="#2563eb",
+            )
+            draw.rectangle(
+                (int(center + 2), bottom - rtt_height, int(center + bar_width + 2), bottom),
+                fill="#f59e0b",
+            )
+            draw.text((int(center - 25), bottom + 8), row["mode"], fill="#0f172a", font=font)
+            draw.text((int(center - bar_width - 4), bottom - throughput_height - 14), f"{throughput:.3f}", fill="#1d4ed8", font=font)
+            draw.text((int(center + 2), bottom - rtt_height - 14), f"{rtt:.1f}", fill="#b45309", font=font)
+        draw.rectangle((right - 180, top + 8, right - 168, top + 20), fill="#2563eb")
+        draw.text((right - 162, top + 7), "Throughput Mbps", fill="#0f172a", font=font)
+        draw.rectangle((right - 180, top + 26, right - 168, top + 38), fill="#f59e0b")
+        draw.text((right - 162, top + 25), "Average RTT ms", fill="#0f172a", font=font)
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    image = Image.new("RGB", (1540, 1120), "white")
+    draw_cwnd(image, (90, 70, 1480, 520))
+    draw_bars(image, (90, 630, 1480, 1030))
+    image.save(output)
+    print(f"saved {output} (Pillow fallback)")
+
+    cwnd_output = output.with_name(f"{output.stem}_cwnd{output.suffix}")
+    cwnd_image = Image.new("RGB", (1540, 650), "white")
+    draw_cwnd(cwnd_image, (90, 70, 1480, 560))
+    cwnd_image.save(cwnd_output)
+    print(f"saved {cwnd_output} (Pillow fallback)")
+
+    bars_output = output.with_name(f"{output.stem}_throughput_rtt{output.suffix}")
+    bars_image = Image.new("RGB", (1260, 650), "white")
+    draw_bars(bars_image, (90, 70, 1200, 560))
+    bars_image.save(bars_output)
+    print(f"saved {bars_output} (Pillow fallback)")
 
 
 def main() -> None:

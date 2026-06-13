@@ -155,33 +155,39 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="use a faster training preset for quick iteration",
     )
-    parser.add_argument("--rounds", type=int, default=100)
-    parser.add_argument("--packets", type=int, default=160)
+    parser.add_argument("--rounds", type=int, default=80)
+    parser.add_argument("--packets", type=int, default=300)
     parser.add_argument("--receiver-port", type=int, default=9301)
     parser.add_argument("--sender-port", type=int, default=9300)
-    parser.add_argument("--window-size", type=int, default=4)
-    parser.add_argument("--max-window", type=int, default=40)
-    parser.add_argument("--rto", type=float, default=0.30)
+    parser.add_argument("--window-size", type=int, default=8)
+    parser.add_argument("--max-window", type=int, default=64)
+    parser.add_argument("--rto", type=float, default=0.20)
     parser.add_argument("--dqn-model", default="artifacts/models/active/dqn_model.pt")
     parser.add_argument("--reset-dqn-model", action="store_true", help="backup and remove the active model before training")
     parser.add_argument("--model-backup-dir", default="artifacts/models/backups")
     parser.add_argument("--dqn-lr", type=float, default=0.0007)
-    parser.add_argument("--dqn-batch-size", type=int, default=32)
-    parser.add_argument("--dqn-replay-capacity", type=int, default=4096)
-    parser.add_argument("--dqn-target-update", type=int, default=20)
-    parser.add_argument("--dqn-gamma", type=float, default=0.90)
-    parser.add_argument("--epsilon", type=float, default=0.20)
-    parser.add_argument("--reward-throughput-weight", type=float, default=1.8)
-    parser.add_argument("--reward-timeout-weight", type=float, default=18.0)
-    parser.add_argument("--reward-retx-weight", type=float, default=3.0)
-    parser.add_argument("--reward-rtt-weight", type=float, default=0.004)
-    parser.add_argument("--reward-cwnd-weight", type=float, default=1.0,
-                        help="CWND efficiency bonus: encourages DQN to maintain higher CWND")
-    parser.add_argument("--epsilon-decay", type=float, default=0.95)
-    parser.add_argument("--min-epsilon", type=float, default=0.02)
+    parser.add_argument("--dqn-batch-size", type=int, default=64)
+    parser.add_argument("--dqn-replay-capacity", type=int, default=8192)
+    parser.add_argument("--dqn-target-update", type=int, default=100)
+    parser.add_argument("--dqn-gamma", type=float, default=0.95)
+    parser.add_argument("--epsilon", type=float, default=0.40)
+    parser.add_argument("--reward-throughput-weight", type=float, default=1.0,
+                        help="weight on throughput utilisation (1-exp(-acks/scale)), normalised to ~[0,1]")
+    parser.add_argument("--reward-timeout-weight", type=float, default=1.0,
+                        help="weight on the per-interval timeout fraction (~[0,1])")
+    parser.add_argument("--reward-retx-weight", type=float, default=0.5,
+                        help="weight on the per-interval loss fraction (~[0,1])")
+    parser.add_argument("--reward-rtt-weight", type=float, default=1.0,
+                        help="weight on normalised queueing delay (RTT inflation above the min-RTT baseline, capped)")
+    parser.add_argument("--reward-cwnd-weight", type=float, default=0.30,
+                        help="weight on CWND utilisation (cwnd/max_cwnd); gentle downward gradient that pins the optimum at the bandwidth-delay knee")
+    parser.add_argument("--reward-target-rtt-ms", type=float, default=None,
+                        help="unused by the delay-aware DQN reward; kept for CLI compatibility")
+    parser.add_argument("--epsilon-decay", type=float, default=0.97)
+    parser.add_argument("--min-epsilon", type=float, default=0.10)
     parser.add_argument("--loss-rate", type=float, default=0.02)
-    parser.add_argument("--delay-ms", type=float, default=20.0)
-    parser.add_argument("--jitter-ms", type=float, default=10.0)
+    parser.add_argument("--delay-ms", type=float, default=10.0)
+    parser.add_argument("--jitter-ms", type=float, default=3.0)
     parser.add_argument("--link-service-delay-ms", type=float, default=10.0)
     parser.add_argument("--link-queue-capacity", type=int, default=20)
     parser.add_argument("--link-bandwidth-drop-after-packets", type=int, default=0)
@@ -193,6 +199,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--summary-file", default="artifacts/training/dqn_summary.csv")
     parser.add_argument("--storm-retx-threshold", type=int, default=1000)
     parser.add_argument("--storm-duration-threshold", type=float, default=30.0)
+    parser.add_argument("--round-timeout", type=float, default=90.0,
+                        help="abandon a round if its sender runs longer than this many seconds (guards against a wedged link hanging the whole run)")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--quiet-sender", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--verbose-sender", action="store_true")
@@ -221,6 +229,41 @@ def apply_fast_preset(args: argparse.Namespace, provided_options: set[str]) -> N
     for name, (option, value) in replacements.items():
         if option not in provided_options:
             setattr(args, name, value)
+
+
+def start_receiver(root: Path, args: argparse.Namespace, initial_seq: int) -> subprocess.Popen:
+    cmd = [
+        sys.executable,
+        str(root / "receiver.py"),
+        "--port",
+        str(args.receiver_port),
+        "--initial-seq",
+        str(initial_seq),
+        "--loss-rate",
+        str(args.loss_rate),
+        "--delay-ms",
+        str(args.delay_ms),
+        "--jitter-ms",
+        str(args.jitter_ms),
+        "--seed",
+        str(args.seed),
+    ]
+    receiver = subprocess.Popen(
+        cmd,
+        cwd=root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
+    )
+    time.sleep(0.4)
+    return receiver
+
+
+def stop_receiver(receiver: subprocess.Popen) -> None:
+    receiver.terminate()
+    try:
+        receiver.wait(timeout=2.0)
+    except subprocess.TimeoutExpired:
+        receiver.kill()
 
 
 def main() -> None:
@@ -265,6 +308,8 @@ def main() -> None:
         raise SystemExit("--reward-rtt-weight must be non-negative")
     if args.reward_cwnd_weight < 0:
         raise SystemExit("--reward-cwnd-weight must be non-negative")
+    if args.reward_target_rtt_ms is not None and args.reward_target_rtt_ms < 0:
+        raise SystemExit("--reward-target-rtt-ms must be non-negative")
     if args.storm_retx_threshold < 0:
         raise SystemExit("--storm-retx-threshold must be non-negative")
     if args.storm_duration_threshold < 0:
@@ -285,31 +330,6 @@ def main() -> None:
         else:
             print(f"[DQN-TRAIN] backed up old model to {backup}", flush=True)
             print(f"[DQN-TRAIN] starting from a fresh DQN model at {dqn_model_path}", flush=True)
-    receiver_cmd = [
-        sys.executable,
-        str(root / "receiver.py"),
-        "--port",
-        str(args.receiver_port),
-        "--initial-seq",
-        "0",
-        "--loss-rate",
-        str(args.loss_rate),
-        "--delay-ms",
-        str(args.delay_ms),
-        "--jitter-ms",
-        str(args.jitter_ms),
-        "--seed",
-        str(args.seed),
-    ]
-
-    receiver = subprocess.Popen(
-        receiver_cmd,
-        cwd=root,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.STDOUT,
-    )
-    time.sleep(0.5)
-
     tqdm = load_tqdm()
     progress = None
     if tqdm is None:
@@ -342,7 +362,7 @@ def main() -> None:
                 "--packets",
                 str(args.packets),
                 "--start-seq",
-                str(round_index * args.packets),
+                "0",
                 "--window-size",
                 str(args.window_size),
                 "--rto",
@@ -388,11 +408,33 @@ def main() -> None:
                 "--history-file",
                 history_file,
             ]
+            if args.reward_target_rtt_ms is not None:
+                sender_cmd.append("--reward-target-rtt-ms")
+                sender_cmd.append(str(args.reward_target_rtt_ms))
             if args.quiet_sender or not args.verbose_sender:
                 sender_cmd.append("--quiet")
-            completed = subprocess.run(sender_cmd, cwd=root)
-            if completed.returncode != 0:
-                raise SystemExit(completed.returncode)
+            # Fresh receiver per round. A single long-lived receiver can wedge
+            # or die partway through a long run, which would hang every later
+            # sender forever; restarting it each round isolates that, and the
+            # per-round timeout abandons a stuck round instead of stalling the
+            # whole training.
+            receiver = start_receiver(root, args, 0)
+            try:
+                try:
+                    completed = subprocess.run(sender_cmd, cwd=root, timeout=args.round_timeout)
+                except subprocess.TimeoutExpired:
+                    print(
+                        f"[DQN-TRAIN] round {round_index + 1} exceeded {args.round_timeout:.0f}s "
+                        "(wedged link); abandoning round and continuing",
+                        flush=True,
+                    )
+                    if progress is not None:
+                        progress.update(1)
+                    continue
+                if completed.returncode != 0:
+                    raise SystemExit(completed.returncode)
+            finally:
+                stop_receiver(receiver)
             latest_metrics = read_latest_metrics(Path(metrics_file))
             checkpoint = None
             if (round_index + 1) % args.checkpoint_every == 0:
@@ -436,11 +478,6 @@ def main() -> None:
     finally:
         if progress is not None:
             progress.close()
-        receiver.terminate()
-        try:
-            receiver.wait(timeout=2.0)
-        except subprocess.TimeoutExpired:
-            receiver.kill()
 
 
 if __name__ == "__main__":
