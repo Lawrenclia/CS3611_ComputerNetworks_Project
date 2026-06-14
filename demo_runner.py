@@ -149,7 +149,6 @@ def latest_row_for_run(path: Path, mode: str) -> dict[str, str] | None:
 def make_scenarios(root: Path, result_dir: Path, args: argparse.Namespace) -> tuple[list[Scenario], list[str]]:
     main_metrics = result_dir / "metrics_main.csv"
     main_history = result_dir / "history_main.csv"
-    drop_metrics = result_dir / "metrics_drop.csv"
     logs = result_dir / "logs"
     notes: list[str] = []
     q_table = Path(args.q_table)
@@ -219,49 +218,9 @@ def make_scenarios(root: Path, result_dir: Path, args: argparse.Namespace) -> tu
     else:
         notes.append("DQN skipped: PyTorch is not installed or --include-dqn=no was selected.")
 
-    # --- Bandwidth drop scenarios: compare AIMD vs Q-Learning recovery ---
-    drop_at = str(max(10, args.packets // 2))
-    drop_factor = "0.5"
-
-    scenarios.append(
-        Scenario(
-            name="AIMD bandwidth drop",
-            mode="aimd",
-            packets=args.packets,
-            window_size=1,
-            extra_args=[
-                "--link-bandwidth-drop-after-packets", drop_at,
-                "--link-bandwidth-drop-factor", drop_factor,
-            ],
-            metrics_file=drop_metrics,
-            history_file=result_dir / "history_drop_aimd.csv",
-            sender_log=logs / "drop_aimd_sender.log",
-            receiver_log=logs / "drop_aimd_receiver.log",
-            receiver_port=args.base_port + 41,
-            sender_port=args.base_port + 40,
-        )
-    )
-    scenarios.append(
-        Scenario(
-            name="Q-Learning bandwidth drop",
-            mode="qlearning",
-            packets=args.packets,
-            window_size=1,
-            extra_args=[
-                "--epsilon", "0.0",
-                "--q-eval",
-                "--qtable-file", str(q_table),
-                "--link-bandwidth-drop-after-packets", drop_at,
-                "--link-bandwidth-drop-factor", drop_factor,
-            ],
-            metrics_file=drop_metrics,
-            history_file=result_dir / "history_drop_qlearn.csv",
-            sender_log=logs / "drop_qlearn_sender.log",
-            receiver_log=logs / "drop_qlearn_receiver.log",
-            receiver_port=args.base_port + 51,
-            sender_port=args.base_port + 50,
-        )
-    )
+    # Bandwidth drop is handled separately by bandwidth_drop_experiment.py
+    # which runs both AIMD and Q-Learning with proper acked-based halving,
+    # adaptation mechanism, and recovery-time calculation.
 
     return scenarios, notes
 
@@ -283,125 +242,158 @@ def plot_if_possible(root: Path, result_dir: Path, metrics: Path, history: Path,
 
 
 def plot_drop_comparison(root: Path, result_dir: Path) -> str:
-    """Generate CWND recovery + metrics bar chart for bandwidth drop comparison."""
+    """Run bandwidth_drop_experiment.py (with timeout) and copy its plots into result_dir.
+    Falls back to cached results if available."""
+    import shutil
+    exp_script = root / "bandwidth_drop_experiment.py"
+    if not exp_script.exists():
+        return "bandwidth_drop_experiment.py not found"
+
+    exp_out = root / "artifacts" / "bandwidth_drop_experiment"
+
+    # Try running the experiment with timeout
+    try:
+        completed = subprocess.run(
+            [sys.executable, str(exp_script), "--packets", "300", "--no-plot"],
+            cwd=root, timeout=90,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        ok = completed.returncode == 0
+    except subprocess.TimeoutExpired:
+        ok = False
+
+    if not ok:
+        # Fall back to cached results
+        if (exp_out / "summary.json").exists():
+            print("[DEMO] bandwidth drop experiment timed out; using cached results", flush=True)
+        else:
+            return "experiment timed out and no cached results available"
+
+    # Generate plots from the experiment's telemetry
     try:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         import numpy as np
+        import json
     except ImportError:
         return "matplotlib not available"
 
-    aimd_hist = result_dir / "history_drop_aimd.csv"
-    ql_hist = result_dir / "history_drop_qlearn.csv"
-    drop_metrics = result_dir / "metrics_drop.csv"
+    summary_path = exp_out / "summary.json"
+    if not summary_path.exists():
+        return "experiment summary.json missing"
 
-    if not aimd_hist.exists() or not ql_hist.exists():
-        return "drop history files missing"
+    with summary_path.open() as f:
+        summary = json.load(f)
 
-    def load_history(path):
-        times, cwnds = [], []
+    results = {r["mode"]: r for r in summary["results"]}
+    if "aimd" not in results or "qlearning" not in results:
+        return "experiment results incomplete"
+
+    aimd = results["aimd"]
+    ql = results["qlearning"]
+    ht = aimd["bandwidth_halving_time_s"]
+
+    # Load CWND history from telemetry CSVs
+    def load_cwnd(path):
+        ts, cs = [], []
         with path.open(newline="") as f:
             for r in csv.DictReader(f):
-                times.append(float(r["time_s"]))
-                cwnds.append(float(r["cwnd"]))
-        return times, cwnds
+                ts.append(float(r["time_s"]))
+                cs.append(float(r["cwnd"]))
+        return ts, cs
 
-    def load_metrics(path, mode):
-        with path.open(newline="") as f:
-            for r in csv.DictReader(f):
-                if r.get("mode") == mode:
-                    return r
-        return None
+    aimd_t, aimd_c = load_cwnd(exp_out / "telemetry_aimd.csv")
+    ql_t, ql_c = load_cwnd(exp_out / "telemetry_qlearn.csv")
 
-    aimd_t, aimd_c = load_history(aimd_hist)
-    ql_t, ql_c = load_history(ql_hist)
-    aimd_m = load_metrics(drop_metrics, "aimd")
-    ql_m = load_metrics(drop_metrics, "qlearning")
+    # ── Figure 1: CWND Recovery + RTT ──
+    fig1, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 9), constrained_layout=True)
 
-    if not aimd_m or not ql_m:
-        return "drop metrics rows missing"
+    ax1.step(aimd_t, aimd_c, where="post", label="AIMD", lw=1.6, color="#2563eb")
+    ax1.step(ql_t, ql_c, where="post", label="Q-Learning", lw=1.6, color="#d97706")
+    ax1.axvline(x=ht, color="red", ls="--", lw=1.8, alpha=0.7,
+                label=f"Bandwidth halving (t={ht:.2f}s)")
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), constrained_layout=True)
+    # Peaks
+    for data, color, label, yoff in [(aimd_c, "#2563eb", "AIMD", 3), (ql_c, "#d97706", "Q-L", -5)]:
+        peak_v = max(data)
+        peak_i = data.index(peak_v)
+        ax1.annotate(f"{label} peak={peak_v:.0f}", xy=(aimd_t[peak_i] if label == "AIMD" else ql_t[peak_i], peak_v),
+                     xytext=(0, yoff), textcoords="offset points", fontsize=10, color=color,
+                     arrowprops=dict(arrowstyle="->", color=color, alpha=0.5), fontweight="bold")
 
-    # --- CWND recovery traces ---
-    ax1.step(aimd_t, aimd_c, where="post", label="AIMD", linewidth=1.6, color="#2563eb")
-    ax1.step(ql_t, ql_c, where="post", label="Q-Learning", linewidth=1.6, color="#d97706")
-    # Mark approximate drop point at half of max time
-    drop_t = max(aimd_t) * 0.45 if aimd_t else 0
-    ax1.axvline(x=drop_t, color="red", linestyle="--", alpha=0.5, linewidth=1.5,
-                label="Bandwidth halving")
+    # Recovery spans
+    for res, color, label, y in [(aimd, "#2563eb", "AIMD", 1.5), (ql, "#d97706", "Q-L", 1.0)]:
+        rt = res["recovery_time_s"]
+        if rt != float("inf") and rt > 0:
+            ax1.axvspan(ht, ht + rt, alpha=0.08, color=color)
+            ax1.text(ht + rt / 2, y, f"{label} recovery\n{rt:.2f}s",
+                     ha="center", fontsize=8, color=color, fontweight="bold")
+
     ax1.set_xlabel("Time (s)")
     ax1.set_ylabel("CWND (packets)")
-    ax1.set_title("CWND Recovery: AIMD vs Q-Learning under Bandwidth Halving")
-    ax1.legend(loc="upper right")
+    ax1.set_title("CWND Recovery under Bandwidth Halving")
+    ax1.legend(loc="upper right", fontsize=9)
     ax1.grid(True, alpha=0.3)
 
-    # Annotate peaks
-    if aimd_c:
-        aimd_peak = max(aimd_c)
-        aimd_pi = aimd_c.index(aimd_peak)
-        ax1.annotate(f"AIMD peak={aimd_peak:.0f}", xy=(aimd_t[aimd_pi], aimd_peak),
-                     xytext=(0, 20), textcoords="offset points", fontsize=9, color="#2563eb",
-                     arrowprops=dict(arrowstyle="->", color="#2563eb", alpha=0.5))
-    if ql_c:
-        ql_peak = max(ql_c)
-        ql_pi = ql_c.index(ql_peak)
-        ax1.annotate(f"Q-L peak={ql_peak:.0f}", xy=(ql_t[ql_pi], ql_peak),
-                     xytext=(0, -25), textcoords="offset points", fontsize=9, color="#d97706",
-                     arrowprops=dict(arrowstyle="->", color="#d97706", alpha=0.5))
+    # RTT subplot
+    def load_rtt(path):
+        ts, rs = [], []
+        with path.open(newline="") as f:
+            for r in csv.DictReader(f):
+                ts.append(float(r["time_s"]))
+                rs.append(float(r.get("rtt_ms", 0)))
+        return ts, rs
 
-    # --- Metrics bar chart ---
-    labels = ["Throughput\n(Mbps)", "Avg RTT\n(ms)", "Retrans-\nmissions", "Timeouts"]
-    aimd_vals = [
-        float(aimd_m.get("throughput_mbps", 0)),
-        float(aimd_m.get("avg_rtt_ms", 0)),
-        float(aimd_m.get("retransmissions", 0)),
-        float(aimd_m.get("timeout_events", 0)),
+    for label, color in [("AIMD", "#2563eb"), ("Q-Learning", "#d97706")]:
+        fname = f"telemetry_{'aimd' if label == 'AIMD' else 'qlearn'}.csv"
+        rt_ts, rt_rs = load_rtt(exp_out / fname)
+        ax2.plot(rt_ts, rt_rs, label=label, lw=1.2, alpha=0.8, color=color)
+    ax2.axvline(x=ht, color="red", ls="--", lw=1.8, alpha=0.7)
+    ax2.set_xlabel("Time (s)")
+    ax2.set_ylabel("RTT (ms)")
+    ax2.set_title("RTT Evolution under Bandwidth Halving")
+    ax2.legend(loc="upper right", fontsize=9)
+    ax2.grid(True, alpha=0.3)
+
+    cwnd_path = result_dir / "comparison_drop.png"
+    fig1.savefig(cwnd_path, dpi=150)
+    plt.close(fig1)
+
+    # ── Figure 2: Post-halving metrics ──
+    fig2, axes = plt.subplots(1, 4, figsize=(16, 5), constrained_layout=True)
+    metric_specs = [
+        ("Recovery\nTime (s)", "recovery_time_s"),
+        ("Throughput\nafter halving\n(Mbps)", "throughput_after_halving_mbps"),
+        ("Avg RTT\nafter halving\n(ms)", "avg_rtt_after_halving_ms"),
+        ("Retransmissions\nafter halving", "retransmissions_after_halving"),
     ]
-    ql_vals = [
-        float(ql_m.get("throughput_mbps", 0)),
-        float(ql_m.get("avg_rtt_ms", 0)),
-        float(ql_m.get("retransmissions", 0)),
-        float(ql_m.get("timeout_events", 0)),
-    ]
+    for ax, (title, key) in zip(axes, metric_specs):
+        vals = [aimd[key], ql[key]]
+        bars = ax.bar(["AIMD", "Q-Learning"], vals, color=["#2563eb", "#d97706"], alpha=0.85, width=0.5)
+        ax.set_title(title, fontsize=10)
+        ax.grid(True, axis="y", alpha=0.3)
+        for bar, val in zip(bars, vals):
+            txt = f"{val:.2f}" if isinstance(val, float) and val < 100 else str(int(val)) if isinstance(val, (int, float)) and val not in (float("inf"),) else "inf"
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(vals) * 0.03,
+                    txt, ha="center", fontsize=10, fontweight="bold")
+        if vals[0] not in (0, float("inf")) and vals[1] not in (float("inf"),):
+            pct = (vals[1] - vals[0]) / abs(vals[0]) * 100
+            clr = "#16a34a" if (("Throughput" in title and pct > 0) or ("Throughput" not in title and pct < 0)) else "#dc2626"
+            ax.text(1, max(vals) * 0.5, f"{pct:+.1f}%", ha="center", fontsize=9, fontweight="bold",
+                    color=clr, bbox=dict(boxstyle="round,pad=0.2", facecolor="#f0fdf4", alpha=0.7))
+    fig2.suptitle("Performance Metrics after Bandwidth Halving", fontsize=13, fontweight="bold")
+    metrics_path = result_dir / "comparison_drop_metrics.png"
+    fig2.savefig(metrics_path, dpi=150)
+    plt.close(fig2)
 
-    x = np.arange(len(labels))
-    width = 0.35
-    bars1 = ax2.bar(x - width / 2, aimd_vals, width, label="AIMD", color="#2563eb", alpha=0.85)
-    bars2 = ax2.bar(x + width / 2, ql_vals, width, label="Q-Learning", color="#d97706", alpha=0.85)
+    # Copy experiment outputs
+    for name in ["summary.json", "conclusion.md", "telemetry_aimd.csv", "telemetry_qlearn.csv"]:
+        src = exp_out / name
+        if src.exists():
+            shutil.copy2(src, result_dir / f"drop_{name}")
 
-    for bar, val in zip(bars1, aimd_vals):
-        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(aimd_vals) * 0.02,
-                 f"{val:.1f}" if val < 100 else str(int(val)),
-                 ha="center", va="bottom", fontsize=8, color="#2563eb")
-    for bar, val in zip(bars2, ql_vals):
-        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(ql_vals) * 0.02,
-                 f"{val:.1f}" if val < 100 else str(int(val)),
-                 ha="center", va="bottom", fontsize=8, color="#d97706")
-
-    # Improvement percentages
-    improvements = []
-    for a, q in zip(aimd_vals, ql_vals):
-        if a != 0:
-            pct = (q - a) / abs(a) * 100
-            improvements.append(f"{pct:+.1f}%")
-        else:
-            improvements.append("-")
-    for i, imp in enumerate(improvements):
-        y_pos = max(aimd_vals[i], ql_vals[i]) * 0.55
-        ax2.text(x[i], y_pos, imp, ha="center", fontsize=9, fontweight="bold",
-                 color="#16a34a", bbox=dict(boxstyle="round,pad=0.3", facecolor="#dcfce7", alpha=0.8))
-
-    ax2.set_xticks(x, labels)
-    ax2.set_title("Performance Metrics under Bandwidth Halving")
-    ax2.legend(loc="upper right")
-    ax2.grid(True, axis="y", alpha=0.3)
-
-    output = result_dir / "comparison_drop.png"
-    fig.savefig(output, dpi=150)
-    plt.close(fig)
-    return "ok"
+    return f"ok (cwnd_recovery + post_halving_metrics + {summary['experiment']['total_packets']} pkts)"
 
 
 def html_link(path: Path, base: Path, label: str | None = None) -> str:
@@ -467,16 +459,22 @@ def write_dashboard(
     notes_html = "".join(f"<li>{html.escape(note)}</li>" for note in notes) or "<li>No skipped optional step.</li>"
     plots_html = "".join(f"<li>{html.escape(status)}</li>" for status in plot_status)
     main_plot = result_dir / "comparison_main.png"
-    drop_plot = result_dir / "comparison_drop.png"
+    drop_cwnd_plot = result_dir / "comparison_drop.png"
+    drop_metrics_plot = result_dir / "comparison_drop_metrics.png"
     main_plot_image = (
         f'<img src="{html.escape(str(main_plot.relative_to(result_dir)))}" alt="main comparison">'
         if main_plot.exists()
         else "<p>main comparison plot was not generated.</p>"
     )
-    drop_plot_image = (
-        f'<img src="{html.escape(str(drop_plot.relative_to(result_dir)))}" alt="bandwidth drop comparison">'
-        if drop_plot.exists()
-        else "<p>bandwidth drop plot was not generated.</p>"
+    drop_cwnd_image = (
+        f'<img src="{html.escape(str(drop_cwnd_plot.relative_to(result_dir)))}" alt="CWND recovery">'
+        if drop_cwnd_plot.exists()
+        else "<p>CWND recovery plot was not generated.</p>"
+    )
+    drop_metrics_image = (
+        f'<img src="{html.escape(str(drop_metrics_plot.relative_to(result_dir)))}" alt="post-halving metrics">'
+        if drop_metrics_plot.exists()
+        else "<p>post-halving metrics plot was not generated.</p>"
     )
 
     body = f"""<!doctype html>
@@ -514,11 +512,9 @@ def write_dashboard(
   <ul>{plots_html}</ul>
   <div class="grid">
     <div><h3>AIMD / Q-Learning / DQN 对比</h3>{html_link(main_plot, result_dir)}<br>{main_plot_image}</div>
-    <div><h3>带宽突变场景</h3>{html_link(drop_plot, result_dir)}<br>{drop_plot_image}</div>
+    <div><h3>带宽突变 — CWND 恢复</h3>{html_link(drop_cwnd_plot, result_dir)}<br>{drop_cwnd_image}</div>
+	    <div><h3>带宽突变 — 减半后指标</h3>{html_link(drop_metrics_plot, result_dir)}<br>{drop_metrics_image}</div>
   </div>
-
-  <h2>备注</h2>
-  <ul>{notes_html}</ul>
 
   <h2>如何复现</h2>
   <p>双击项目根目录的 <code>Run_Demo.command</code>，或在终端执行：</p>
