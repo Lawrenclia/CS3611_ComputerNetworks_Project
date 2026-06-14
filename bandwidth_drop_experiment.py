@@ -260,11 +260,11 @@ class QLearnController:
 
     def adapt_to_halving(self):
         self.bandwidth_halved = True
-        self.epsilon = max(self.epsilon, 0.25)
-        self.alpha = 0.30
-        self.rw_timeout = 25.0
-        self.rw_retx = 5.0
-        self.rw_rtt = 0.01
+        self.epsilon = max(self.epsilon, 0.15)
+        self.alpha = 0.15
+        self.rw_timeout = 20.0
+        self.rw_retx = 4.0
+        self.rw_rtt = 0.008
 
     def step(self, srtt: float | None):
         if self.int_acked + self.int_losses == 0:
@@ -367,6 +367,7 @@ class DropExperiment:
         self.max_cwnd = kw.get("max_cwnd", 64)
         self.ctrl_interval = kw.get("ctrl_interval", 0.10)
         self.seed = kw.get("seed", 42)
+        self.max_duration_s = kw.get("max_duration_s", 45.0)
 
         random.seed(self.seed)
 
@@ -444,6 +445,9 @@ class DropExperiment:
                         self.finished = True
                         break
                     now = time.monotonic()
+                    if now - self.t0 > self.max_duration_s:
+                        self.finished = True
+                        break
                     if now >= next_ctrl:
                         self._control_step(now)
                         next_ctrl = now + self.ctrl_interval
@@ -673,10 +677,33 @@ def make_plots(aimd: dict, ql: dict, out: Path):
     for label, data, color in [("AIMD", aimd, "#2563eb"), ("Q-Learning", ql, "#d97706")]:
         ts = [t for t, _ in data["cwnd_history"]]
         cs = [c for _, c in data["cwnd_history"]]
-        ax1.step(ts, cs, where="post", label=label, lw=1.6, color=color)
+        # Raw step trace
+        ax1.step(ts, cs, where="post", label=label, lw=1.0, color=color, alpha=0.5)
+        # Smoothed overlay (moving average, window=3)
+        if len(cs) >= 3:
+            smooth = np.convolve(cs, np.ones(3)/3, mode="same")
+            ax1.plot(ts, smooth, lw=2.0, color=color, alpha=1.0,
+                     label=f"{label} (smoothed)" if label == "AIMD" else None)
         rts = [t for t, _ in data["rtt_history"]]
         rr = [r * 1000 for _, r in data["rtt_history"]]
         ax2.plot(rts, rr, label=label, lw=1.2, alpha=0.8, color=color)
+
+    # Annotate ACK compression spike for AIMD
+    aimd_ts = [t for t, _ in aimd["cwnd_history"]]
+    aimd_cs = [c for _, c in aimd["cwnd_history"]]
+    spike_idx = None
+    for i in range(1, len(aimd_cs) - 1):
+        if aimd_cs[i] > aimd_cs[i-1] * 3 and aimd_cs[i] > aimd_cs[i+1] * 2:
+            spike_idx = i
+            break
+    if spike_idx is not None:
+        ax1.annotate("ACK compression\n(CWND=1 recovery burst)",
+                     xy=(aimd_ts[spike_idx], aimd_cs[spike_idx]),
+                     xytext=(aimd_ts[spike_idx] + 0.8, aimd_cs[spike_idx] * 0.5),
+                     fontsize=8, color="#1e40af",
+                     arrowprops=dict(arrowstyle="->", color="#1e40af", alpha=0.6,
+                                     connectionstyle="arc3,rad=0.3"),
+                     bbox=dict(boxstyle="round,pad=0.3", facecolor="#eff6ff", alpha=0.8))
 
     for ax in (ax1, ax2):
         ax.axvline(x=ht, color="red", ls="--", lw=1.8, alpha=0.7,
@@ -767,8 +794,8 @@ recovery to {aimd['recovery_time_s']:.2f}s.
 **2. Q-Learning adapts proactively.** Pre-halving CWND of
 {ql['avg_cwnd_before_halving']:.1f} is lower than AIMD's because the
 policy learned to *hold* on rising RTT, preserving queue headroom.
-After halving, adaptation (epsilon boosted to 0.25, alpha raised to
-0.30, amplified loss/RTT penalties) causes the agent to unlearn
+After halving, adaptation (epsilon boosted to 0.15, alpha raised to
+0.15, moderately amplified loss/RTT penalties) causes the agent to unlearn
 large-window preferences. Recovery: {ql['recovery_time_s']:.2f}s
 ({'faster' if rec_d > 0 else 'comparable'} vs AIMD).
 
