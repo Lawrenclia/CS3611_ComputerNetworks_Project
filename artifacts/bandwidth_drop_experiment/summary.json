@@ -1,0 +1,48 @@
+{
+  "experiment": {
+    "total_packets": 300,
+    "halving_at": 150,
+    "link_delay_ms": 10.0,
+    "queue_capacity": 20,
+    "rto_s": 0.2,
+    "seed": 42
+  },
+  "results": [
+    {
+      "mode": "aimd",
+      "total_packets": 300,
+      "duration_s": 8.502083292,
+      "throughput_mbps": 0.28905856548270564,
+      "avg_rtt_ms": 112.02682495117188,
+      "retransmissions": 70,
+      "timeouts": 43,
+      "fast_retransmissions": 27,
+      "bandwidth_halving_time_s": 3.3263638749999997,
+      "recovery_time_s": 2.8174154170000008,
+      "avg_cwnd_before_halving": 8.457345588694936,
+      "avg_cwnd_after_halving": 4.931277317240375,
+      "avg_rtt_after_halving_ms": 117.8385681576199,
+      "throughput_after_halving_mbps": 0.23741627028001622,
+      "retransmissions_after_halving": 49,
+      "timeouts_after_halving": 32
+    },
+    {
+      "mode": "qlearning",
+      "total_packets": 300,
+      "duration_s": 9.572435292,
+      "throughput_mbps": 0.25673717554966363,
+      "avg_rtt_ms": 82.72325992584229,
+      "retransmissions": 49,
+      "timeouts": 27,
+      "fast_retransmissions": 22,
+      "bandwidth_halving_time_s": 3.1548178339999993,
+      "recovery_time_s": 0.6968608330000006,
+      "avg_cwnd_before_halving": 5.402439024390244,
+      "avg_cwnd_after_halving": 3.6417910447761193,
+      "avg_rtt_after_halving_ms": 121.61040824392568,
+      "throughput_after_halving_mbps": 0.1914729271480986,
+      "retransmissions_after_halving": 45,
+      "timeouts_after_halving": 26
+    }
+  ]
+}

@@ -150,7 +150,6 @@ def make_scenarios(root: Path, result_dir: Path, args: argparse.Namespace) -> tu
     main_metrics = result_dir / "metrics_main.csv"
     main_history = result_dir / "history_main.csv"
     drop_metrics = result_dir / "metrics_drop.csv"
-    drop_history = result_dir / "history_drop.csv"
     logs = result_dir / "logs"
     notes: list[str] = []
     q_table = Path(args.q_table)
@@ -220,6 +219,28 @@ def make_scenarios(root: Path, result_dir: Path, args: argparse.Namespace) -> tu
     else:
         notes.append("DQN skipped: PyTorch is not installed or --include-dqn=no was selected.")
 
+    # --- Bandwidth drop scenarios: compare AIMD vs Q-Learning recovery ---
+    drop_at = str(max(10, args.packets // 2))
+    drop_factor = "0.5"
+
+    scenarios.append(
+        Scenario(
+            name="AIMD bandwidth drop",
+            mode="aimd",
+            packets=args.packets,
+            window_size=1,
+            extra_args=[
+                "--link-bandwidth-drop-after-packets", drop_at,
+                "--link-bandwidth-drop-factor", drop_factor,
+            ],
+            metrics_file=drop_metrics,
+            history_file=result_dir / "history_drop_aimd.csv",
+            sender_log=logs / "drop_aimd_sender.log",
+            receiver_log=logs / "drop_aimd_receiver.log",
+            receiver_port=args.base_port + 41,
+            sender_port=args.base_port + 40,
+        )
+    )
     scenarios.append(
         Scenario(
             name="Q-Learning bandwidth drop",
@@ -227,22 +248,18 @@ def make_scenarios(root: Path, result_dir: Path, args: argparse.Namespace) -> tu
             packets=args.packets,
             window_size=1,
             extra_args=[
-                "--epsilon",
-                "0.0",
+                "--epsilon", "0.0",
                 "--q-eval",
-                "--qtable-file",
-                str(q_table),
-                "--link-bandwidth-drop-after-packets",
-                str(max(10, args.packets // 2)),
-                "--link-bandwidth-drop-factor",
-                "0.5",
+                "--qtable-file", str(q_table),
+                "--link-bandwidth-drop-after-packets", drop_at,
+                "--link-bandwidth-drop-factor", drop_factor,
             ],
             metrics_file=drop_metrics,
-            history_file=drop_history,
-            sender_log=logs / "drop_sender.log",
-            receiver_log=logs / "drop_receiver.log",
-            receiver_port=args.base_port + 31,
-            sender_port=args.base_port + 30,
+            history_file=result_dir / "history_drop_qlearn.csv",
+            sender_log=logs / "drop_qlearn_sender.log",
+            receiver_log=logs / "drop_qlearn_receiver.log",
+            receiver_port=args.base_port + 51,
+            sender_port=args.base_port + 50,
         )
     )
 
@@ -263,6 +280,128 @@ def plot_if_possible(root: Path, result_dir: Path, metrics: Path, history: Path,
     ]
     completed = run_command(command, root, result_dir / f"{output.stem}_plot.log")
     return "ok" if completed.returncode == 0 else f"failed, see {output.stem}_plot.log"
+
+
+def plot_drop_comparison(root: Path, result_dir: Path) -> str:
+    """Generate CWND recovery + metrics bar chart for bandwidth drop comparison."""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import numpy as np
+    except ImportError:
+        return "matplotlib not available"
+
+    aimd_hist = result_dir / "history_drop_aimd.csv"
+    ql_hist = result_dir / "history_drop_qlearn.csv"
+    drop_metrics = result_dir / "metrics_drop.csv"
+
+    if not aimd_hist.exists() or not ql_hist.exists():
+        return "drop history files missing"
+
+    def load_history(path):
+        times, cwnds = [], []
+        with path.open(newline="") as f:
+            for r in csv.DictReader(f):
+                times.append(float(r["time_s"]))
+                cwnds.append(float(r["cwnd"]))
+        return times, cwnds
+
+    def load_metrics(path, mode):
+        with path.open(newline="") as f:
+            for r in csv.DictReader(f):
+                if r.get("mode") == mode:
+                    return r
+        return None
+
+    aimd_t, aimd_c = load_history(aimd_hist)
+    ql_t, ql_c = load_history(ql_hist)
+    aimd_m = load_metrics(drop_metrics, "aimd")
+    ql_m = load_metrics(drop_metrics, "qlearning")
+
+    if not aimd_m or not ql_m:
+        return "drop metrics rows missing"
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), constrained_layout=True)
+
+    # --- CWND recovery traces ---
+    ax1.step(aimd_t, aimd_c, where="post", label="AIMD", linewidth=1.6, color="#2563eb")
+    ax1.step(ql_t, ql_c, where="post", label="Q-Learning", linewidth=1.6, color="#d97706")
+    # Mark approximate drop point at half of max time
+    drop_t = max(aimd_t) * 0.45 if aimd_t else 0
+    ax1.axvline(x=drop_t, color="red", linestyle="--", alpha=0.5, linewidth=1.5,
+                label="Bandwidth halving")
+    ax1.set_xlabel("Time (s)")
+    ax1.set_ylabel("CWND (packets)")
+    ax1.set_title("CWND Recovery: AIMD vs Q-Learning under Bandwidth Halving")
+    ax1.legend(loc="upper right")
+    ax1.grid(True, alpha=0.3)
+
+    # Annotate peaks
+    if aimd_c:
+        aimd_peak = max(aimd_c)
+        aimd_pi = aimd_c.index(aimd_peak)
+        ax1.annotate(f"AIMD peak={aimd_peak:.0f}", xy=(aimd_t[aimd_pi], aimd_peak),
+                     xytext=(0, 20), textcoords="offset points", fontsize=9, color="#2563eb",
+                     arrowprops=dict(arrowstyle="->", color="#2563eb", alpha=0.5))
+    if ql_c:
+        ql_peak = max(ql_c)
+        ql_pi = ql_c.index(ql_peak)
+        ax1.annotate(f"Q-L peak={ql_peak:.0f}", xy=(ql_t[ql_pi], ql_peak),
+                     xytext=(0, -25), textcoords="offset points", fontsize=9, color="#d97706",
+                     arrowprops=dict(arrowstyle="->", color="#d97706", alpha=0.5))
+
+    # --- Metrics bar chart ---
+    labels = ["Throughput\n(Mbps)", "Avg RTT\n(ms)", "Retrans-\nmissions", "Timeouts"]
+    aimd_vals = [
+        float(aimd_m.get("throughput_mbps", 0)),
+        float(aimd_m.get("avg_rtt_ms", 0)),
+        float(aimd_m.get("retransmissions", 0)),
+        float(aimd_m.get("timeout_events", 0)),
+    ]
+    ql_vals = [
+        float(ql_m.get("throughput_mbps", 0)),
+        float(ql_m.get("avg_rtt_ms", 0)),
+        float(ql_m.get("retransmissions", 0)),
+        float(ql_m.get("timeout_events", 0)),
+    ]
+
+    x = np.arange(len(labels))
+    width = 0.35
+    bars1 = ax2.bar(x - width / 2, aimd_vals, width, label="AIMD", color="#2563eb", alpha=0.85)
+    bars2 = ax2.bar(x + width / 2, ql_vals, width, label="Q-Learning", color="#d97706", alpha=0.85)
+
+    for bar, val in zip(bars1, aimd_vals):
+        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(aimd_vals) * 0.02,
+                 f"{val:.1f}" if val < 100 else str(int(val)),
+                 ha="center", va="bottom", fontsize=8, color="#2563eb")
+    for bar, val in zip(bars2, ql_vals):
+        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(ql_vals) * 0.02,
+                 f"{val:.1f}" if val < 100 else str(int(val)),
+                 ha="center", va="bottom", fontsize=8, color="#d97706")
+
+    # Improvement percentages
+    improvements = []
+    for a, q in zip(aimd_vals, ql_vals):
+        if a != 0:
+            pct = (q - a) / abs(a) * 100
+            improvements.append(f"{pct:+.1f}%")
+        else:
+            improvements.append("-")
+    for i, imp in enumerate(improvements):
+        y_pos = max(aimd_vals[i], ql_vals[i]) * 0.55
+        ax2.text(x[i], y_pos, imp, ha="center", fontsize=9, fontweight="bold",
+                 color="#16a34a", bbox=dict(boxstyle="round,pad=0.3", facecolor="#dcfce7", alpha=0.8))
+
+    ax2.set_xticks(x, labels)
+    ax2.set_title("Performance Metrics under Bandwidth Halving")
+    ax2.legend(loc="upper right")
+    ax2.grid(True, axis="y", alpha=0.3)
+
+    output = result_dir / "comparison_drop.png"
+    fig.savefig(output, dpi=150)
+    plt.close(fig)
+    return "ok"
 
 
 def html_link(path: Path, base: Path, label: str | None = None) -> str:
@@ -426,10 +565,9 @@ def main() -> None:
     plot_status = []
     main_metrics = result_dir / "metrics_main.csv"
     main_history = result_dir / "history_main.csv"
-    drop_metrics = result_dir / "metrics_drop.csv"
-    drop_history = result_dir / "history_drop.csv"
     plot_status.append("main comparison: " + plot_if_possible(root, result_dir, main_metrics, main_history, "comparison_main.png"))
-    plot_status.append("bandwidth drop: " + plot_if_possible(root, result_dir, drop_metrics, drop_history, "comparison_drop.png"))
+    drop_status = plot_drop_comparison(root, result_dir)
+    plot_status.append("bandwidth drop comparison (CWND + metrics): " + drop_status)
 
     index = write_dashboard(root, result_dir, scenarios, notes, plot_status)
     print(f"[DEMO] dashboard: {index}")

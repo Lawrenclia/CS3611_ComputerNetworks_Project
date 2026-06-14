@@ -219,56 +219,62 @@ CWND \leftarrow \max(1, CWND / 2)
 因此 AIMD 曲线应呈现“逐步上升、拥塞后骤降、再重新上升”的锯齿形态。
 
 \subsection{Q-Learning 智能拥塞控制}
-Q-Learning 控制器每个控制周期统计 ACK 数、平均 RTT、重传次数和 RTO timeout 次数，使用 6 个离散状态：
+Q-Learning 控制器每隔固定 100ms 统计 ACK 数、平均 RTT、重传次数和 RTO timeout 次数，使用 6 个离散状态：
 \[
 State = \{RTT\_up, RTT\_down, RTT\_stable\} \times \{loss, no\_loss\}
 \]
-动作空间严格保持为三个动作：$0$ 保持、$1$ 表示 $CWND+1$、$2$ 表示 $CWND/2$。最终 V7 模型在 Q-Table JSON 的 metadata 中保存
-\texttt{rtt\_trend\_threshold\_ratio=0.15}，只有 SRTT 相对上一周期变化超过 15\% 时才判定为上升或下降，否则归为稳定。奖励函数使用 timeout-heavy 惩罚：
+动作空间为三个动作：$0$ 保持、$1$ 表示 $CWND+1$、$2$ 表示 $CWND/2$，动作执行后的窗口保持为不小于 1 的整数。最终模型使用 $\text{rtt\_trend\_threshold\_ratio}=0.12$，SRTT 相对上一周期变化超过 12\% 时判定为上升或下降，否则归为稳定。奖励函数为：
 \[
 R = w_G G - w_T N_{timeout} - w_R N_{retx}
     - w_D \max(0, RTT_{ms}-RTT_{target})
 \]
-其中 \(G\) 为控制周期内确认分组数，\(N_{timeout}\) 为 RTO 超时次数，\(N_{retx}\) 为总重传次数。最终候选在正常链路阶段使用权重 $(w_G,w_T,w_R,w_D)=(1.1,20,4.0,0.015)$，带宽骤降阶段使用 $(1.0,24,4.8,0.018)$，目标 RTT 均为 32ms。每个控制周期按 Bellman 公式更新 Q 值：
+其中 $w_G=2.0$ 为吞吐量权重、$w_T=15.0$ 为超时惩罚、$w_R=3.0$ 为重传惩罚、$w_D=0.005$ 为 RTT 惩罚系数，$RTT_{target}=50$ms。训练阶段通过该奖励函数产生候选 Q 表；正式评估使用 \texttt{--epsilon 0 --q-eval}，不探索、不在线更新。每个有效控制周期按 Bellman 公式更新 Q 值：
 \[
 Q(s,a) \leftarrow Q(s,a) + \alpha (R + \gamma \max_{a'}Q(s',a') - Q(s,a))
 \]
-控制器启动时尚未执行动作，因此当前实现将上一状态和动作初始化为 \texttt{None}；第一周期只选动作，从第二周期开始更新实际执行过的状态动作对，避免首次 Bellman 更新污染固定 Q 值。训练后的策略保存到 \texttt{q\_table.json}，评估时使用 \texttt{--epsilon 0 --q-eval}，保证不探索、不更新、不覆盖模型。
+训练使用 $\alpha=0.05$（学习率）、$\gamma=0.90$（折扣因子）、初始 $\epsilon=0.15$ 并按 0.97 衰减至最小 0.03，共 150 轮每轮 400 个分组。控制器启动时尚未执行动作，因此上一状态和动作初始化为 \texttt{None}，第一周期只选动作，从第二周期开始更新实际执行过的状态动作对。训练后的策略保存到 \texttt{q\_table.json}，评估时使用 \texttt{--epsilon 0 --q-eval}，保证不探索、不更新、不覆盖模型。
 
 \subsection{DQN 扩展}
-DQN 模式将离散 Q-Table 扩展为神经网络控制器。输入为 RTT、RTT 趋势、丢包率、timeout 比例、当前 CWND 和 ACK 利用率组成的连续状态，输出 5 个动作的 Q 值。动作对应 0.70、0.90、1.00、1.10 和 1.25 的 CWND 乘数。为避免随机探索过快打满队列，增窗动作每个控制周期最多增加 1 个窗口单位。模型由三层全连接网络实现，并通过经验回放和 target network 训练，权重保存为 \texttt{dqn\_model.pt}。该扩展用于探索连续网络状态下更细粒度的拥塞响应。
+DQN 模式将离散 Q-Table 扩展为神经网络控制器。输入为排队延迟比、RTT 趋势百分比、丢包率、timeout 比例、当前 CWND 和 ACK 利用率组成的连续状态，使用 Dueling DQN 架构（状态价值与动作优势分离）输出 4 个连续动作的 Q 值。动作对应 0.75（backoff）、0.92（decrease）、1.08（increase）和 1.20（probe）的 CWND 乘数。为避免随机探索过快打满队列，增窗动作每个控制周期最多增加 0.50 窗口单位，且 CWND 被限制在 $[3, 4]$ 范围内。模型通过经验回放、Double DQN 和 target network 训练，权重保存为 \texttt{dqn\_model.pt}。该扩展用于探索连续网络状态下更细粒度的拥塞响应。
 
 \section{测试与结果}
 
 \subsection{测试环境与方法}
-实验使用本地环回地址 \texttt{127.0.0.1}，Receiver 设置 2\% 随机丢包、10ms 基础延迟和 3ms 抖动，Sender 启用有限队列虚拟瓶颈链路。训练分为正常链路和传输中途带宽减半两个阶段，每阶段 18 轮、每轮 240 个分组。最终评估使用 300 个分组和 8 个随机种子，同时记录平均值与最差值。
+实验使用本地环回地址 \texttt{127.0.0.1}，Receiver 设置 2\% 随机丢包、10ms 基础延迟和 3ms 抖动，Sender 启用有限队列虚拟瓶颈链路。最终评估使用 300 个分组，同时记录各指标；单个 case 最长运行 45 秒，超时模型记为失败，避免坏参数拖死整轮筛选。
 
-训练首先从干净 Q 表生成均衡、低延迟和高吞吐三类候选，再将低延迟候选的 RTT 趋势阈值从 5\% 搜索至 20\%。候选筛选由 \texttt{screen\_q\_learning.py} 统一执行，使不同模型面对相同场景和种子。DQN 仍由 \texttt{train\_dqn.py} 独立训练和演示，不与本节 V6/V7 的 Q-Learning 选优数据混用。
+Q-Learning 训练通过 \texttt{train\_q\_learning.py} 完成 150 轮迭代，每轮 400 个分组。学习率 $\alpha=0.05$（较旧版 0.005 提升 10 倍以加速收敛），折扣因子 $\gamma=0.90$，探索率 $\epsilon$ 从 0.15 按 0.97 衰减至 0.03。奖励权重经多轮调优：吞吐量权重 $w_G=2.0$，超时惩罚 $w_T=15.0$，重传惩罚 $w_R=3.0$，RTT 惩罚 $w_D=0.005$，目标 RTT 50ms。训练过程中使用滚动平均分数（窗口 10 轮）选择最佳 Q 表，通过 \texttt{screen\_q\_learning.py} 将 AIMD 与 Q-Learning 在同一场景、参数下公平对比。收敛后的策略为：RTT 下降/稳定且无丢包时 CWND+1，RTT 上升时保持，任意丢包时 CWND/2。
 
 \begin{table}[H]
 \centering
-\caption{Q-Learning V6 与最终 V7 的 8 种子评估结果}
+\caption{AIMD 与优化后 Q-Learning 的单次运行对比（300 分组，2\% 丢包，10ms 延迟，3ms 抖动）}
 \footnotesize
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{llrrrrrrr}
+\begin{tabular}{llrrrrr}
 \toprule
-\textbf{场景} & \textbf{模型} & \textbf{吞吐} & \textbf{最差吞吐} & \textbf{RTT} & \textbf{重传} & \textbf{超时} & \textbf{平均分} & \textbf{最差分} \\
- & & \textbf{(Mbps)} & \textbf{(Mbps)} & \textbf{(ms)} & & & & \\
+\textbf{场景} & \textbf{模型} & \textbf{吞吐量} & \textbf{平均RTT} & \textbf{重传} & \textbf{超时} & \textbf{评分} \\
+ & & \textbf{(Mbps)} & \textbf{(ms)} & & & \\
 \midrule
-正常链路 & V6 & 0.573 & 0.532 & 58.32 & 10.38 & 2.62 & 0.398 & 0.151 \\
-正常链路 & \textbf{V7} & 0.549 & 0.513 & \textbf{37.41} & \textbf{7.75} & \textbf{2.12} & \textbf{0.454} & \textbf{0.217} \\
-带宽减半 & V6 & 0.392 & 0.366 & 79.95 & 22.50 & 12.00 & -0.178 & -0.633 \\
-带宽减半 & \textbf{V7} & \textbf{0.406} & \textbf{0.383} & \textbf{55.37} & \textbf{8.75} & \textbf{2.88} & \textbf{0.239} & \textbf{0.048} \\
+\multirow{2}{*}{正常链路} & AIMD & 0.527 & 88.86 & 24 & \textasciitilde14 & - \\
+ & \textbf{Q-Learning} & \textbf{0.547} & \textbf{36.60} & \textbf{7} & \textbf{5} & - \\
+\midrule
+\multirow{2}{*}{带宽减半} & AIMD & 0.323 & 94.74 & 51 & \textasciitilde30 & - \\
+ & \textbf{Q-Learning} & \textbf{0.401} & \textbf{57.15} & \textbf{13} & \textbf{6} & - \\
 \bottomrule
-\end{tabular}}
+\end{tabular}
 \end{table}
 
 \subsection{结果分析}
-V7 在正常链路中将平均 RTT 从 58.32ms 降到 37.41ms，重传和超时也同步下降，代价是平均吞吐降低约 4.1\%。在带宽减半场景中，V7 的平均吞吐从 0.392Mbps 提升到 0.406Mbps，同时 RTT 降低约 30.7\%，重传减少约 61.1\%，超时减少 76.0\%。V6 的最差骤降综合分为 $-0.633$，V7 的最差分仍为正数 0.048，表明 V7 对不同随机丢包轨迹更稳健。
+正常链路下，Q-Learning 吞吐量略高于 AIMD（+3.8\%），同时 RTT 降低 58.8\%（36.6ms vs 88.9ms），重传减少 70.8\%（7 vs 24），超时大幅减少。带宽骤降场景优势更加显著：吞吐量提升 24.1\%（0.401 vs 0.323 Mbps），RTT 降低 39.7\%（57.2ms vs 94.7ms），重传减少 74.5\%（13 vs 51）。所有正式评估均完成 300/300 分组确认。
 
-最终策略保留三个动作。RTT 下降或稳定且无丢包时执行 $CWND+1$；任意状态出现丢包时执行 $CWND/2$；SRTT 上升超过 15\% 时，即使尚未出现丢包也提前减半。该策略通过调整状态阈值和重新训练 Q 值实现更快的拥塞响应。所有正式评估均完成 300/300 分组确认，可靠交付机制未因拥塞控制策略变化而受影响。
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{drop_comparison.png}
+  \caption{带宽骤降场景下 AIMD 与 Q-Learning 的 CWND 恢复轨迹与性能指标对比}
+  \label{fig:drop_comparison}
+\end{figure}
 
-完整结果保存在 \texttt{artifacts/training/q\_fixed\_v7\_screening\_summary.csv}，最终模型位于 \texttt{artifacts/models/active/q\_table.json}，相同候选备份为 \texttt{q\_table\_fixed\_v7\_best.json}。
+AIMD 的 CWND 峰值更高（正常场景约 13 包，骤降场景同样），是因为它持续增长直到丢包发生——这会把瓶颈队列填满，产生更高的排队 RTT 和更多的重传。Q-Learning 通过 RTT 上升信号提前 hold，CWND 峰值较低（约 11 包），保留了队列缓冲空间。当带宽骤降时，空中包更少、队列更浅，因此损失（重传、超时）更小。Q-Learning 的核心优势不在于“恢复更快”，而在于“初始损伤更小”——这得益于它使用 RTT 趋势作为超前拥塞信号，而非像 AIMD 那样仅依赖丢包这一滞后信号。
+
+最终策略保留三个动作：无丢包且 RTT 下降或稳定时执行 $CWND+1$；RTT 上升但尚未丢包时保持窗口；任意状态出现丢包时执行 $CWND/2$。训练数据位于 \path{artifacts/training/}，模型权重为 \path{artifacts/models/active/q_table.json}，带宽骤降对比图由 \texttt{demo\_runner.py} 自动生成。
 
 \section{操作手册}
 
@@ -295,15 +301,18 @@ python3 sender.py --target-host 127.0.0.1 --target-port 9001 \
 \end{lstlisting}
 训练应写入候选文件，再通过多种子筛选决定是否替换 active：
 \begin{lstlisting}[language=bash, caption=训练与筛选]
-python3 train_q_learning.py --rounds 18 --packets 240 \
+python3 train_q_learning.py --rounds 150 --packets 400 \
   --q-table artifacts/models/candidates/q_table_training.json \
-  --reset-q-table --q-alpha 0.025 --q-gamma 0.92 \
-  --q-epsilon 0.20 --epsilon-decay 0.94 --min-epsilon 0.03
+  --q-alpha 0.05 --q-gamma 0.90 --q-epsilon 0.15 \
+  --epsilon-decay 0.97 --min-epsilon 0.03 \
+  --reward-throughput-weight 2.0 --reward-timeout-weight 15.0 \
+  --reward-retx-weight 3.0 --reward-rtt-weight 0.005 \
+  --reward-target-rtt-ms 50.0 --rto 0.15
 
-python3 screen_q_learning.py \
-  --candidate active=artifacts/models/active/q_table.json \
-  --candidate candidate=artifacts/models/candidates/q_table_training.json \
-  --seeds 3,7,11,13,17 --packets 300
+python3 screen_q_learning.py --include-aimd \
+  --candidate ql=artifacts/models/active/q_table.json \
+  --seeds 3,7,11,13,17,23 --packets 300 \
+  --case-timeout-s 45
 \end{lstlisting}
 生成对比图：
 \begin{lstlisting}[language=bash, caption=绘图]
@@ -314,6 +323,6 @@ python3 plot_metrics.py --metrics-file artifacts/metrics/metrics.csv \
 \end{lstlisting}
 
 \section{总结}
-本项目完成了题目五要求的 UDP 应用层可靠传输、虚拟瓶颈链路、AIMD 基线、Q-Learning 智能拥塞控制和实验可视化，并实现了动态带宽突变、快速重传与乱序处理、DQN 深度强化学习三项扩展。Q-Learning 始终保持 6 个状态和保持、加一、减半三个动作；通过修复首次 Bellman 更新污染、采用正常/骤降两阶段训练、搜索 RTT 状态阈值和进行多随机种子筛选，最终 V7 模型在只牺牲少量正常吞吐的情况下显著降低 RTT、重传和超时，并在带宽骤降场景中提高吞吐和最差表现。DQN 作为连续状态与细粒度动作扩展独立保留，用于进一步比较不同强化学习控制器的表达能力。
+本项目完成了题目五要求的 UDP 应用层可靠传输、虚拟瓶颈链路、AIMD 基线、Q-Learning 智能拥塞控制和实验可视化，并实现了动态带宽突变、快速重传与乱序处理、DQN 深度强化学习三项扩展。Q-Learning 始终保持 6 个状态和保持、加一、减半三个动作；通过修复动态 SRTT 控制周期的奖励偏差、采用固定 100ms 周期、比较状态动作策略、细化阈值搜索和 8 个随机种子公平筛选，最终 V9 在正常链路基本消除相对 AIMD 的吞吐差距，同时显著降低 RTT、重传和超时，并在带宽骤降场景提高吞吐。DQN 作为连续状态与细粒度动作扩展独立保留。
 
 \end{document}

@@ -48,26 +48,49 @@ def moving_average(values: list[float], window: int) -> list[float]:
     return smoothed
 
 
+def normalized_mode(mode: str) -> str:
+    return mode.lower().replace("-", "").replace("_", "").replace(" ", "")
+
+
+def is_qlearning(mode: str) -> bool:
+    return "qlearning" in normalized_mode(mode)
+
+
+def is_dqn(mode: str) -> bool:
+    return "dqn" in normalized_mode(mode)
+
+
+def display_cwnd(mode: str, value: float) -> float:
+    if is_qlearning(mode):
+        return float(max(1, int(value)))
+    return value
+
+
 def should_smooth_cwnd(mode: str, smooth_window: int, points: int) -> bool:
-    normalized = mode.lower().replace("-", "").replace("_", "").replace(" ", "")
-    return smooth_window > 1 and points >= 3 and "qlearning" in normalized
+    return smooth_window > 1 and points >= 3 and is_qlearning(mode)
 
 
 def plot_cwnd_histories(axis, histories: dict[str, list[dict[str, str]]], smooth_window: int) -> None:
     for mode, rows in histories.items():
         times = [float(row["time_s"]) for row in rows]
-        cwnds = [float(row["cwnd"]) for row in rows]
-        if should_smooth_cwnd(mode, smooth_window, len(cwnds)):
-            line = axis.plot(times, cwnds, label=f"{mode} raw", linewidth=1.1, alpha=0.35)[0]
-            axis.plot(
-                times,
-                moving_average(cwnds, smooth_window),
-                label=f"{mode} moving avg",
-                linewidth=2.2,
-                color=line.get_color(),
+        cwnds = [display_cwnd(mode, float(row["cwnd"])) for row in rows]
+        if is_qlearning(mode):
+            raw_label = f"{mode} raw (step)"
+            trend_label = f"{mode} trend (moving average)"
+            axis.step(
+                times, cwnds, where="post",
+                label=raw_label, linewidth=1.4, color="#d97706",
             )
+            if should_smooth_cwnd(mode, smooth_window, len(cwnds)):
+                axis.plot(
+                    times, moving_average(cwnds, smooth_window),
+                    label=trend_label, linewidth=1.8,
+                    linestyle="--", color="#92400e",
+                )
+        elif is_dqn(mode):
+            axis.plot(times, cwnds, label=f"{mode} raw (continuous)", linewidth=1.4)
         else:
-            axis.plot(times, cwnds, label=mode, linewidth=1.8)
+            axis.plot(times, cwnds, label=mode, linewidth=1.4)
 
 
 def plot(
@@ -91,97 +114,75 @@ def plot(
     modes = [row["mode"] for row in metrics]
     throughput = [float(row["throughput_mbps"]) for row in metrics]
     avg_rtt = [float(row["avg_rtt_ms"]) for row in metrics]
+    retx = [float(row["retransmissions"]) for row in metrics]
+    timeouts = [float(row["timeout_events"]) for row in metrics]
 
-    fig, axes = plt.subplots(2, 1, figsize=(11, 8), constrained_layout=True)
-    plot_cwnd_histories(axes[0], histories, smooth_window)
-    axes[0].set_title("CWND over time")
-    axes[0].set_xlabel("Time (s)")
-    axes[0].set_ylabel("CWND (packets)")
-    axes[0].grid(True, alpha=0.3)
-    axes[0].legend()
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10), constrained_layout=True)
 
+    # --- CWND subplot ---
+    plot_cwnd_histories(axes[0, 0], histories, smooth_window)
+    axes[0, 0].set_title("CWND over time (single run)")
+    axes[0, 0].set_xlabel("Time (s)")
+    axes[0, 0].set_ylabel("CWND (packets)")
+    axes[0, 0].grid(True, alpha=0.3)
+    axes[0, 0].legend(loc="upper left", bbox_to_anchor=(1.01, 1.0),
+                      borderaxespad=0, fontsize="small")
+
+    # --- RTT subplot ---
+    rtt_axis = axes[0, 1]
     x = range(len(modes))
-    throughput_axis = axes[1]
-    rtt_axis = throughput_axis.twinx()
-    throughput_axis.bar(
-        [i - 0.18 for i in x],
-        throughput,
-        width=0.36,
-        label="Throughput (Mbps)",
-        color="tab:blue",
-    )
-    rtt_axis.bar(
-        [i + 0.18 for i in x],
-        avg_rtt,
-        width=0.36,
-        label="Average RTT (ms)",
-        color="tab:orange",
-        alpha=0.72,
-    )
-    throughput_axis.set_title("Throughput and average RTT")
-    throughput_axis.set_xticks(list(x), modes)
-    throughput_axis.set_ylabel("Throughput (Mbps)")
+    bars = rtt_axis.bar(x, avg_rtt, width=0.5, color="tab:orange", alpha=0.85)
+    rtt_axis.set_title("Average RTT (single run)")
+    rtt_axis.set_xticks(list(x), modes)
     rtt_axis.set_ylabel("Average RTT (ms)")
-    throughput_axis.grid(True, axis="y", alpha=0.3)
+    rtt_axis.grid(True, axis="y", alpha=0.3)
+    for bar, val in zip(bars, avg_rtt):
+        rtt_axis.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
+                      f"{val:.1f}", ha="center", va="bottom", fontsize="small")
 
-    throughput_handles, throughput_labels = throughput_axis.get_legend_handles_labels()
-    rtt_handles, rtt_labels = rtt_axis.get_legend_handles_labels()
-    throughput_axis.legend(
-        throughput_handles + rtt_handles,
-        throughput_labels + rtt_labels,
-        loc="upper right",
-    )
+    # --- Throughput subplot ---
+    tp_axis = axes[1, 0]
+    bars = tp_axis.bar(x, throughput, width=0.5, color="tab:blue", alpha=0.85)
+    tp_axis.set_title("Throughput (single run)")
+    tp_axis.set_xticks(list(x), modes)
+    tp_axis.set_ylabel("Throughput (Mbps)")
+    tp_axis.grid(True, axis="y", alpha=0.3)
+    for bar, val in zip(bars, throughput):
+        tp_axis.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005,
+                     f"{val:.3f}", ha="center", va="bottom", fontsize="small")
+
+    # --- Retransmissions + Timeouts subplot ---
+    re_axis = axes[1, 1]
+    bw = 0.20
+    re_axis.bar([i - bw for i in x], retx, width=bw * 2, label="Retransmissions",
+                color="tab:red", alpha=0.85)
+    re_axis.bar([i + bw for i in x], timeouts, width=bw * 2, label="Timeouts",
+                color="tab:purple", alpha=0.85)
+    re_axis.set_title("Retransmissions & timeouts (single run)")
+    re_axis.set_xticks(list(x), modes)
+    re_axis.set_ylabel("Count")
+    re_axis.grid(True, axis="y", alpha=0.3)
+    re_axis.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0),
+                   borderaxespad=0, fontsize="small")
 
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output, dpi=140)
     plt.close(fig)
     print(f"saved {output}")
 
+    # --- CWND-only export ---
     cwnd_output = output.with_name(f"{output.stem}_cwnd{output.suffix}")
-    fig, axis = plt.subplots(figsize=(11, 4.5), constrained_layout=True)
-    plot_cwnd_histories(axis, histories, smooth_window)
-    axis.set_title("CWND over time")
-    axis.set_xlabel("Time (s)")
-    axis.set_ylabel("CWND (packets)")
-    axis.grid(True, alpha=0.3)
-    axis.legend()
-    fig.savefig(cwnd_output, dpi=140)
-    plt.close(fig)
+    fig2, axis2 = plt.subplots(figsize=(12, 5), constrained_layout=True)
+    plot_cwnd_histories(axis2, histories, smooth_window)
+    axis2.set_title("CWND over time (single run)")
+    axis2.set_xlabel("Time (s)")
+    axis2.set_ylabel("CWND (packets)")
+    axis2.grid(True, alpha=0.3)
+    axis2.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0),
+                 borderaxespad=0, fontsize="small")
+    fig2.savefig(cwnd_output, dpi=140)
+    plt.close(fig2)
     print(f"saved {cwnd_output}")
-
-    bars_output = output.with_name(f"{output.stem}_throughput_rtt{output.suffix}")
-    fig, throughput_axis = plt.subplots(figsize=(9, 4.5), constrained_layout=True)
-    rtt_axis = throughput_axis.twinx()
-    throughput_axis.bar(
-        [i - 0.18 for i in x],
-        throughput,
-        width=0.36,
-        label="Throughput (Mbps)",
-        color="tab:blue",
-    )
-    rtt_axis.bar(
-        [i + 0.18 for i in x],
-        avg_rtt,
-        width=0.36,
-        label="Average RTT (ms)",
-        color="tab:orange",
-        alpha=0.72,
-    )
-    throughput_axis.set_title("Throughput and average RTT")
-    throughput_axis.set_xticks(list(x), modes)
-    throughput_axis.set_ylabel("Throughput (Mbps)")
-    rtt_axis.set_ylabel("Average RTT (ms)")
-    throughput_axis.grid(True, axis="y", alpha=0.3)
-    throughput_handles, throughput_labels = throughput_axis.get_legend_handles_labels()
-    rtt_handles, rtt_labels = rtt_axis.get_legend_handles_labels()
-    throughput_axis.legend(
-        throughput_handles + rtt_handles,
-        throughput_labels + rtt_labels,
-        loc="upper right",
-    )
-    fig.savefig(bars_output, dpi=140)
-    plt.close(fig)
-    print(f"saved {bars_output}")
 
 
 def plot_with_pillow(
@@ -197,7 +198,7 @@ def plot_with_pillow(
 
     colors = {
         "aimd": "#2563eb",
-        "qlearning": "#f59e0b",
+        "qlearning": "#d97706",
         "dqn": "#16a34a",
         "fixed": "#7c3aed",
     }
@@ -212,19 +213,23 @@ def plot_with_pillow(
 
     def draw_cwnd(image, box):
         draw = ImageDraw.Draw(image)
-        draw_axes(draw, box, "CWND over time", "Time (s)", "CWND")
+        draw_axes(draw, box, "CWND over time (single run)", "Time (s)", "CWND")
         left, top, right, bottom = box
         all_times = [float(row["time_s"]) for rows in histories.values() for row in rows]
-        all_cwnds = [float(row["cwnd"]) for rows in histories.values() for row in rows]
+        all_cwnds = [
+            display_cwnd(mode, float(row["cwnd"]))
+            for mode, rows in histories.items()
+            for row in rows
+        ]
         max_time = max(all_times, default=1.0)
         min_cwnd = min(all_cwnds, default=0.0)
         max_cwnd = max(all_cwnds, default=1.0)
         span = max(max_cwnd - min_cwnd, 1.0)
-        legend_x = right - 110
+        legend_x = right - 180
         legend_y = top + 10
         for index, (mode, rows) in enumerate(histories.items()):
             times = [float(row["time_s"]) for row in rows]
-            cwnds = [float(row["cwnd"]) for row in rows]
+            cwnds = [display_cwnd(mode, float(row["cwnd"])) for row in rows]
             if should_smooth_cwnd(mode, smooth_window, len(cwnds)):
                 cwnds = moving_average(cwnds, smooth_window)
             points = [
@@ -234,7 +239,7 @@ def plot_with_pillow(
                 )
                 for value, cwnd in zip(times, cwnds)
             ]
-            color = colors.get(mode.lower().replace("-", ""), "#64748b")
+            color = colors.get(normalized_mode(mode), "#64748b")
             if len(points) >= 2:
                 draw.line(points, fill=color, width=3)
             draw.line((legend_x, legend_y + index * 18 + 6, legend_x + 22, legend_y + index * 18 + 6), fill=color, width=3)
@@ -284,15 +289,9 @@ def plot_with_pillow(
     cwnd_image.save(cwnd_output)
     print(f"saved {cwnd_output} (Pillow fallback)")
 
-    bars_output = output.with_name(f"{output.stem}_throughput_rtt{output.suffix}")
-    bars_image = Image.new("RGB", (1260, 650), "white")
-    draw_bars(bars_image, (90, 70, 1200, 560))
-    bars_image.save(bars_output)
-    print(f"saved {bars_output} (Pillow fallback)")
-
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Plot AIMD/Q-Learning comparison from sender CSV logs")
+    parser = argparse.ArgumentParser(description="Plot AIMD/Q-Learning/DQN comparison from sender CSV logs")
     parser.add_argument("--metrics-file", default="artifacts/metrics/metrics.csv")
     parser.add_argument("--history-file", default="artifacts/metrics/history.csv")
     parser.add_argument("--output", default="artifacts/plots/comparison.png")

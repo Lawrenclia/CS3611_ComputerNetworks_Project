@@ -32,7 +32,6 @@ Q_EXPANDED_STATE_NAMES = tuple(
     for bucket in Q_EXPANDED_CWND_BUCKETS
 )
 Q_ACTION_KEYS = ("0", "1", "2")
-Q_ACTION_NAMES = ("hold", "cwnd+1", "cwnd/2")
 DQN_STATE_FEATURES = (
     "queue_delay_ratio",
     "rtt_trend_percent",
@@ -72,6 +71,7 @@ DQN_ACK_SATURATION = 1.5
 DQN_ARCH = "dueling_dqn_v5"
 DQN_WARM_START_SAMPLES = 4096
 DQN_WARM_START_EPOCHS = 160
+DEFAULT_QLEARNING_CONTROL_INTERVAL = 0.10
 
 
 @dataclass
@@ -91,6 +91,7 @@ class CongestionController:
         epsilon: float,
         alpha: float,
         gamma: float,
+        q_additive_step: int,
         reward_throughput_weight: float,
         reward_rtt_weight: float,
         reward_timeout_weight: float,
@@ -113,6 +114,7 @@ class CongestionController:
         self.epsilon = epsilon
         self.alpha = alpha
         self.gamma = gamma
+        self.q_additive_step = q_additive_step
         self.reward_throughput_weight = reward_throughput_weight
         self.reward_rtt_weight = reward_rtt_weight
         self.reward_timeout_weight = reward_timeout_weight
@@ -183,6 +185,9 @@ class CongestionController:
             return max(1, int(self.cwnd + 0.70))
         return max(1, int(self.cwnd))
 
+    def q_action_name(self, action: int) -> str:
+        return ("hold", f"cwnd+{self.q_additive_step}", "cwnd/2")[action]
+
     def on_ack(self, newly_acked: int, latest_rtt: float | None) -> None:
         if newly_acked <= 0:
             return
@@ -214,6 +219,8 @@ class CongestionController:
             return self._step_dqn(srtt)
         if self.mode != "qlearning":
             self._reset_interval()
+            return None
+        if self.interval_acked + self.interval_losses == 0:
             return None
 
         state = self._state_from_interval(srtt)
@@ -247,8 +254,8 @@ class CongestionController:
                     "state_count": len(Q_STATE_NAMES),
                     "rtt_trend_threshold_ratio": self.rtt_trend_threshold_ratio,
                     "actions": {
-                        action_key: action_name
-                        for action_key, action_name in zip(Q_ACTION_KEYS, Q_ACTION_NAMES)
+                        action_key: self.q_action_name(action_index)
+                        for action_index, action_key in enumerate(Q_ACTION_KEYS)
                     },
                 }
             }
@@ -272,10 +279,16 @@ class CongestionController:
         return max(range(len(Q_ACTION_KEYS)), key=lambda i: row[i])
 
     def _apply_action(self, action: int) -> None:
+        current_window = max(1, int(self.cwnd))
         if action == 1:
-            self.cwnd = min(self.max_cwnd, self.cwnd + 1.0)
+            self.cwnd = min(
+                self.max_cwnd,
+                float(current_window + self.q_additive_step),
+            )
         elif action == 2:
-            self.cwnd = max(1.0, self.cwnd / 2.0)
+            self.cwnd = float(max(1, current_window // 2))
+        else:
+            self.cwnd = float(current_window)
 
     def _state_from_interval(self, srtt: float | None) -> int:
         if srtt is None or self.last_srtt is None:
@@ -857,6 +870,11 @@ class ReliableSender:
         total_packets: int,
         window_size: int,
         rto: float,
+        q_control_interval: float,
+        q_low_window_control_interval: float,
+        q_low_window_threshold: int,
+        q_additive_step: int,
+        fast_retransmit_threshold: int,
         verbose: bool = True,
         start_seq: int = 0,
         use_virtual_link: bool = True,
@@ -893,6 +911,10 @@ class ReliableSender:
         self.window_size = max(1, window_size)
         self.cc_mode = cc_mode
         self.rto = min(rto, 0.06) if cc_mode == "dqn" else rto
+        self.q_control_interval = q_control_interval
+        self.q_low_window_control_interval = q_low_window_control_interval
+        self.q_low_window_threshold = q_low_window_threshold
+        self.fast_retransmit_threshold = fast_retransmit_threshold
         self.verbose = verbose
         self.start_seq = start_seq
         self.end_seq = start_seq + total_packets
@@ -923,6 +945,7 @@ class ReliableSender:
             epsilon=epsilon,
             alpha=q_alpha,
             gamma=q_gamma,
+            q_additive_step=q_additive_step,
             reward_throughput_weight=reward_throughput_weight,
             reward_rtt_weight=reward_rtt_weight,
             reward_timeout_weight=reward_timeout_weight,
@@ -970,7 +993,12 @@ class ReliableSender:
 
         started_at = time.monotonic()
         self.started_at = started_at
-        next_control_at = started_at + self.rto
+        if self.cc_mode == "dqn":
+            next_control_at = started_at + 0.015
+        elif self.cc_mode == "qlearning":
+            next_control_at = started_at + self._q_control_interval()
+        else:
+            next_control_at = started_at + self.rto
         try:
             while not self.stop_event.is_set():
                 with self.lock:
@@ -988,6 +1016,11 @@ class ReliableSender:
                             # count, and let the throughput term mask the delay
                             # penalty - which makes the agent over-drive CWND.
                             interval = 0.015
+                        elif self.cc_mode == "qlearning":
+                            # Keep ACK-count rewards comparable between cycles.
+                            # A cycle tied to SRTT would reward congestion merely
+                            # because the longer interval can collect more ACKs.
+                            interval = self._q_control_interval()
                         else:
                             interval = max(self.srtt or self.rto, 0.05)
                         next_control_at = now + interval
@@ -1080,6 +1113,7 @@ class ReliableSender:
         state.transmissions += 1
         self.retransmissions += 1
         self.controller.on_loss(reason=reason)
+        self._record_cwnd(now)
         if reason == "FAST":
             self.fast_retransmissions += 1
         self._log(
@@ -1160,7 +1194,7 @@ class ReliableSender:
             "ACK",
             f"duplicate cumulative_ack={ack_number} dup_count={self.duplicate_ack_count}",
         )
-        if self.duplicate_ack_count < 3:
+        if self.duplicate_ack_count < self.fast_retransmit_threshold:
             return
 
         missing_seq = ack_number + 1
@@ -1194,7 +1228,7 @@ class ReliableSender:
                 "state={state} action={action}({action_name}) reward={reward:.3f} cwnd={cwnd:.2f}".format(
                     state=Q_STATE_NAMES[state],
                     action=action,
-                    action_name=Q_ACTION_NAMES[action],
+                    action_name=self.controller.q_action_name(action),
                     reward=reward,
                     cwnd=self.controller.cwnd,
                 ),
@@ -1202,11 +1236,16 @@ class ReliableSender:
             return
         self._log("DQN", f"{detail} reward={reward:.3f}")
 
+    def _q_control_interval(self) -> float:
+        if self.controller.window_limit() <= self.q_low_window_threshold:
+            return self.q_low_window_control_interval
+        return self.q_control_interval
+
     def _record_cwnd(self, now: float) -> None:
         if self.started_at is None:
             return
         elapsed = now - self.started_at
-        if self.cwnd_history and elapsed - self.cwnd_history[-1][0] < 0.01:
+        if self.cwnd_history and elapsed - self.cwnd_history[-1][0] < 0.001:
             self.cwnd_history[-1] = (elapsed, self.controller.cwnd)
         else:
             self.cwnd_history.append((elapsed, self.controller.cwnd))
@@ -1354,6 +1393,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epsilon", "--q-epsilon", dest="epsilon", type=float, default=0.10)
     parser.add_argument("--q-alpha", type=float, default=0.30)
     parser.add_argument("--q-gamma", type=float, default=0.85)
+    parser.add_argument("--q-additive-step", type=int, default=1)
     parser.add_argument(
         "--reward-throughput-weight",
         "--reward-ack-weight",
@@ -1414,6 +1454,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--history-file", default="artifacts/metrics/history.csv")
     parser.add_argument("--plot-file", default=None)
     parser.add_argument("--rto", type=float, default=0.20)
+    parser.add_argument(
+        "--q-control-interval-ms",
+        type=float,
+        default=DEFAULT_QLEARNING_CONTROL_INTERVAL * 1000.0,
+        help="fixed Q-Learning decision interval in milliseconds",
+    )
+    parser.add_argument(
+        "--q-low-window-control-interval-ms",
+        type=float,
+        default=None,
+        help="Q-Learning decision interval while CWND is at or below the low-window threshold",
+    )
+    parser.add_argument(
+        "--q-low-window-threshold",
+        type=int,
+        default=3,
+        help="CWND ceiling for the optional low-window Q-Learning interval",
+    )
+    parser.add_argument(
+        "--fast-retransmit-threshold",
+        type=int,
+        default=3,
+        help="duplicate ACKs required before fast retransmission",
+    )
     parser.add_argument("--link-queue-capacity", type=int, default=20)
     parser.add_argument("--link-service-delay-ms", type=float, default=10.0)
     parser.add_argument("--link-bandwidth-drop-after-packets", type=int, default=0)
@@ -1458,6 +1522,17 @@ def main() -> None:
         raise SystemExit("repeated local port range exceeds 65535")
     if args.rto <= 0:
         raise SystemExit("--rto must be positive")
+    if args.q_control_interval_ms <= 0:
+        raise SystemExit("--q-control-interval-ms must be positive")
+    if (
+        args.q_low_window_control_interval_ms is not None
+        and args.q_low_window_control_interval_ms <= 0
+    ):
+        raise SystemExit("--q-low-window-control-interval-ms must be positive")
+    if args.q_low_window_threshold < 1:
+        raise SystemExit("--q-low-window-threshold must be at least 1")
+    if args.fast_retransmit_threshold <= 0:
+        raise SystemExit("--fast-retransmit-threshold must be positive")
     if args.max_cwnd < 1:
         raise SystemExit("--max-cwnd must be at least 1")
     if not 0 <= args.epsilon <= 1:
@@ -1466,6 +1541,8 @@ def main() -> None:
         raise SystemExit("--q-alpha must be in (0, 1]")
     if not 0 <= args.q_gamma <= 1:
         raise SystemExit("--q-gamma must be between 0 and 1")
+    if args.q_additive_step < 1:
+        raise SystemExit("--q-additive-step must be at least 1")
     if args.reward_alpha is not None:
         args.reward_throughput_weight = args.reward_alpha
     if args.reward_beta is not None:
@@ -1516,6 +1593,16 @@ def main() -> None:
             total_packets=args.packets,
             window_size=args.window_size,
             rto=args.rto,
+            q_control_interval=args.q_control_interval_ms / 1000.0,
+            q_low_window_control_interval=(
+                args.q_low_window_control_interval_ms
+                if args.q_low_window_control_interval_ms is not None
+                else args.q_control_interval_ms
+            )
+            / 1000.0,
+            q_low_window_threshold=args.q_low_window_threshold,
+            q_additive_step=args.q_additive_step,
+            fast_retransmit_threshold=args.fast_retransmit_threshold,
             verbose=not args.quiet,
             start_seq=args.start_seq + round_index * args.packets,
             use_virtual_link=not args.disable_virtual_link,

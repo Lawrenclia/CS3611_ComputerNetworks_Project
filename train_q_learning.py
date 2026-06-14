@@ -58,7 +58,7 @@ def copy_q_table(source: Path, target: Path) -> Path | None:
     return target
 
 
-def seed_q_table(path: Path, backup_dir: Path) -> Path | None:
+def seed_q_table(path: Path, backup_dir: Path, rtt_trend_threshold_ratio: float) -> Path | None:
     backup = None
     if path.exists():
         backup_dir.mkdir(parents=True, exist_ok=True)
@@ -69,8 +69,8 @@ def seed_q_table(path: Path, backup_dir: Path) -> Path | None:
         "metadata": {
             "state_features": ["rtt_trend", "loss_flag"],
             "state_count": len(Q_STATE_NAMES),
-            "rtt_trend_threshold_ratio": 0.05,
-            "actions": {"0": "hold", "1": "cwnd+1", "2": "cwnd/2"},
+            "rtt_trend_threshold_ratio": rtt_trend_threshold_ratio,
+            "actions": {"0": "hold", "1": "cwnd+2", "2": "cwnd/2"},
         }
     }
     for state in Q_STATE_NAMES:
@@ -117,12 +117,12 @@ def score_metrics(
 
 def seed_values_for_state(trend: str, loss_flag: str) -> dict[str, float]:
     if loss_flag == "loss":
-        return {"0": 0.0, "1": -1.0, "2": 1.5}
+        return {"0": -1.0, "1": -6.0, "2": 3.0}
     if trend == "rtt_up":
-        return {"0": 0.8, "1": 0.2, "2": 0.0}
+        return {"0": 4.0, "1": 0.5, "2": -2.0}
     if trend == "rtt_down":
-        return {"0": 0.2, "1": 1.6, "2": -0.8}
-    return {"0": 0.4, "1": 1.0, "2": -0.5}
+        return {"0": 0.2, "1": 6.0, "2": -1.5}
+    return {"0": 0.8, "1": 4.5, "2": -1.0}
 
 
 def append_summary(
@@ -246,14 +246,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="use a faster training preset for quick iteration",
     )
-    parser.add_argument("--rounds", type=int, default=100)
-    parser.add_argument("--packets", type=int, default=300)
+    parser.add_argument("--rounds", type=int, default=150)
+    parser.add_argument("--packets", type=int, default=400)
     parser.add_argument("--receiver-port", type=int, default=9201)
     parser.add_argument("--sender-port", type=int, default=9200)
     parser.add_argument("--window-size", type=int, default=1)
     parser.add_argument("--max-window", type=int, default=64)
-    parser.add_argument("--rto", type=float, default=0.22)
-    parser.add_argument("--q-table", default="artifacts/models/active/q_table.json")
+    parser.add_argument("--rto", type=float, default=0.15)
+    parser.add_argument(
+        "--q-table",
+        default="artifacts/models/candidates/q_table_training.json",
+        help="candidate Q-table to update; active is only replaced after screening",
+    )
     parser.add_argument(
         "--reset-q-table",
         dest="reset_q_table",
@@ -268,21 +272,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="continue training from the existing Q-table instead of re-seeding it",
     )
     parser.add_argument("--qtable-backup-dir", default="artifacts/models/backups")
-    parser.add_argument("--q-alpha", type=float, default=0.003)
+    parser.add_argument("--q-alpha", type=float, default=0.05)
     parser.add_argument("--q-gamma", type=float, default=0.90)
-    parser.add_argument("--q-epsilon", type=float, default=0.12)
-    parser.add_argument("--reward-throughput-weight", type=float, default=1.2)
-    parser.add_argument("--reward-timeout-weight", type=float, default=16.0)
+    parser.add_argument("--q-epsilon", type=float, default=0.15)
+    parser.add_argument("--rtt-trend-threshold-ratio", type=float, default=0.12)
+    parser.add_argument("--reward-throughput-weight", type=float, default=2.0)
+    parser.add_argument("--reward-timeout-weight", type=float, default=15.0)
     parser.add_argument("--reward-retx-weight", type=float, default=3.0)
-    parser.add_argument("--reward-rtt-weight", type=float, default=0.010)
+    parser.add_argument("--reward-rtt-weight", type=float, default=0.005)
     parser.add_argument(
         "--reward-target-rtt-ms",
         type=float,
-        default=30.0,
+        default=50.0,
         help="only penalize RTT above this target in the Q-Learning reward",
     )
-    parser.add_argument("--epsilon-decay", type=float, default=0.975)
-    parser.add_argument("--min-epsilon", type=float, default=0.02)
+    parser.add_argument("--epsilon-decay", type=float, default=0.97)
+    parser.add_argument("--min-epsilon", type=float, default=0.03)
     parser.add_argument("--loss-rate", type=float, default=0.02)
     parser.add_argument("--delay-ms", type=float, default=10.0)
     parser.add_argument("--jitter-ms", type=float, default=3.0)
@@ -483,6 +488,8 @@ def main() -> None:
         raise SystemExit("--min-epsilon must be in [0, 1]")
     if not 0.0 <= args.eval_epsilon <= 1.0:
         raise SystemExit("--eval-epsilon must be in [0, 1]")
+    if not 0.0 < args.rtt_trend_threshold_ratio <= 1.0:
+        raise SystemExit("--rtt-trend-threshold-ratio must be in (0, 1]")
 
     root = Path(__file__).resolve().parent
     q_table = (root / args.q_table).resolve()
@@ -493,7 +500,7 @@ def main() -> None:
     qtable_backup_dir = (root / args.qtable_backup_dir).resolve()
     best_table = (root / args.best_table).resolve()
     if args.reset_q_table or not q_table.exists():
-        backup = seed_q_table(q_table, qtable_backup_dir)
+        backup = seed_q_table(q_table, qtable_backup_dir, args.rtt_trend_threshold_ratio)
         if backup is None:
             print(f"[TRAIN] seeded new Q-table at {q_table}", flush=True)
         else:

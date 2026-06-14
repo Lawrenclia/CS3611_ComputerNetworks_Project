@@ -91,6 +91,12 @@ class VirtualFunnelLink:
                 max_queue_depth=self._stats.max_queue_depth,
             )
 
+    def set_service_delay(self, delay_ms: float) -> None:
+        """Externally set the service delay (e.g. to simulate bandwidth drop)."""
+        with self._lock:
+            self.service_delay_ms = float(delay_ms)
+            self.service_delay = self.service_delay_ms / 1000.0
+
     def close(self) -> None:
         self._stop_event.set()
         self._worker.join(timeout=1.0)
