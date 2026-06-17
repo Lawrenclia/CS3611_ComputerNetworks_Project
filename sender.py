@@ -48,7 +48,7 @@ DQN_STATE_FEATURES = (
 # backoff/probe give it the range to react to congestion or grow from cold.
 DQN_ACTION_MULTIPLIERS = (0.75, 0.92, 1.08, 1.20)
 DQN_ACTION_NAMES = ("backoff", "decrease", "increase", "probe")
-DQN_MIN_PROBE_INCREASE = 0.25
+DQN_MIN_PROBE_INCREASE = 0.35
 DQN_MAX_INCREASE_PER_STEP = 0.50
 # Hard floor on CWND: keep at least the bandwidth-delay product in flight so the
 # pipe never starves (a dip to 1 would halve throughput). The agent still learns
@@ -910,7 +910,7 @@ class ReliableSender:
         self.total_packets = total_packets
         self.window_size = max(1, window_size)
         self.cc_mode = cc_mode
-        self.rto = min(rto, 0.06) if cc_mode == "dqn" else rto
+        self.rto = rto
         self.q_control_interval = q_control_interval
         self.q_low_window_control_interval = q_low_window_control_interval
         self.q_low_window_threshold = q_low_window_threshold
