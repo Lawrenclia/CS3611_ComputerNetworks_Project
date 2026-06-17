@@ -253,10 +253,10 @@ def plot_drop_comparison(root: Path, result_dir: Path) -> str:
 
     # Try running the experiment with timeout
     try:
+        print("[DEMO] running bandwidth drop experiment (AIMD/Q-Learning, packets=300) ...", flush=True)
         completed = subprocess.run(
             [sys.executable, str(exp_script), "--packets", "300", "--no-plot"],
             cwd=root, timeout=90,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         ok = completed.returncode == 0
     except subprocess.TimeoutExpired:
