@@ -1336,34 +1336,53 @@ class ReliableSender:
         rtt_times = [item[0] for item in self.rtt_history]
         rtts = [item[1] * 1000.0 for item in self.rtt_history]
 
-        fig, axes = plt.subplots(2, 1, figsize=(9, 7), constrained_layout=True)
-        axes[0].plot(times, cwnds, label=f"{self.cc_mode} cwnd", linewidth=1.8)
-        axes[0].set_title("CWND over time")
-        axes[0].set_xlabel("Time (s)")
-        axes[0].set_ylabel("CWND (packets)")
-        axes[0].grid(True, alpha=0.3)
-        axes[0].legend()
-
-        if rtts:
-            axes[1].plot(rtt_times, rtts, label="RTT", color="tab:orange", linewidth=1.4)
-        axes[1].bar(
-            [0],
-            [throughput_mbps],
-            width=0.35,
-            label=f"Throughput {throughput_mbps:.3f} Mbps",
-            color="tab:green",
-            alpha=0.45,
-        )
-        axes[1].set_title("RTT samples and throughput")
-        axes[1].set_xlabel("Time (s)")
-        axes[1].set_ylabel("RTT (ms) / Mbps")
-        axes[1].grid(True, alpha=0.3)
-        axes[1].legend()
-
         self.plot_file.parent.mkdir(parents=True, exist_ok=True)
+
+        fig, axis = plt.subplots(figsize=(9, 4.8), constrained_layout=True)
+        axis.plot(times, cwnds, label=f"{self.cc_mode} cwnd", linewidth=1.8)
+        axis.set_title("CWND over time")
+        axis.set_xlabel("Time (s)")
+        axis.set_ylabel("CWND (packets)")
+        axis.grid(True, alpha=0.3)
+        axis.legend()
         fig.savefig(self.plot_file, dpi=140)
         plt.close(fig)
         self._log("PLOT", f"saved {self.plot_file}")
+
+        rtt_plot = self.plot_file.with_name(f"{self.plot_file.stem}_rtt{self.plot_file.suffix}")
+        fig, axis = plt.subplots(figsize=(9, 4.8), constrained_layout=True)
+        if rtts:
+            axis.plot(rtt_times, rtts, label="RTT", color="tab:orange", linewidth=1.4)
+        axis.set_title("RTT samples")
+        axis.set_xlabel("Time (s)")
+        axis.set_ylabel("RTT (ms)")
+        axis.grid(True, alpha=0.3)
+        handles, _ = axis.get_legend_handles_labels()
+        if handles:
+            axis.legend()
+        fig.savefig(rtt_plot, dpi=140)
+        plt.close(fig)
+        self._log("PLOT", f"saved {rtt_plot}")
+
+        throughput_plot = self.plot_file.with_name(
+            f"{self.plot_file.stem}_throughput{self.plot_file.suffix}"
+        )
+        fig, axis = plt.subplots(figsize=(5.5, 4.5), constrained_layout=True)
+        bar = axis.bar([self.cc_mode], [throughput_mbps], width=0.45, color="tab:green", alpha=0.75)
+        axis.set_title("Throughput")
+        axis.set_ylabel("Throughput (Mbps)")
+        axis.grid(True, axis="y", alpha=0.3)
+        axis.text(
+            bar[0].get_x() + bar[0].get_width() / 2,
+            bar[0].get_height(),
+            f"{throughput_mbps:.3f}",
+            ha="center",
+            va="bottom",
+            fontsize="small",
+        )
+        fig.savefig(throughput_plot, dpi=140)
+        plt.close(fig)
+        self._log("PLOT", f"saved {throughput_plot}")
 
     def _log(self, category: str, message: str) -> None:
         if not self.verbose:

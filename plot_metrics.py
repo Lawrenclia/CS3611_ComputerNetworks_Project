@@ -117,72 +117,87 @@ def plot(
     retx = [float(row["retransmissions"]) for row in metrics]
     timeouts = [float(row["timeout_events"]) for row in metrics]
 
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10), constrained_layout=True)
-
-    # --- CWND subplot ---
-    plot_cwnd_histories(axes[0, 0], histories, smooth_window)
-    axes[0, 0].set_title("CWND over time (single run)")
-    axes[0, 0].set_xlabel("Time (s)")
-    axes[0, 0].set_ylabel("CWND (packets)")
-    axes[0, 0].grid(True, alpha=0.3)
-    axes[0, 0].legend(loc="upper left", bbox_to_anchor=(1.01, 1.0),
-                      borderaxespad=0, fontsize="small")
-
-    # --- RTT subplot ---
-    rtt_axis = axes[0, 1]
-    x = range(len(modes))
-    bars = rtt_axis.bar(x, avg_rtt, width=0.5, color="tab:orange", alpha=0.85)
-    rtt_axis.set_title("Average RTT (single run)")
-    rtt_axis.set_xticks(list(x), modes)
-    rtt_axis.set_ylabel("Average RTT (ms)")
-    rtt_axis.grid(True, axis="y", alpha=0.3)
-    for bar, val in zip(bars, avg_rtt):
-        rtt_axis.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
-                      f"{val:.1f}", ha="center", va="bottom", fontsize="small")
-
-    # --- Throughput subplot ---
-    tp_axis = axes[1, 0]
-    bars = tp_axis.bar(x, throughput, width=0.5, color="tab:blue", alpha=0.85)
-    tp_axis.set_title("Throughput (single run)")
-    tp_axis.set_xticks(list(x), modes)
-    tp_axis.set_ylabel("Throughput (Mbps)")
-    tp_axis.grid(True, axis="y", alpha=0.3)
-    for bar, val in zip(bars, throughput):
-        tp_axis.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005,
-                     f"{val:.3f}", ha="center", va="bottom", fontsize="small")
-
-    # --- Retransmissions + Timeouts subplot ---
-    re_axis = axes[1, 1]
-    bw = 0.20
-    re_axis.bar([i - bw for i in x], retx, width=bw * 2, label="Retransmissions",
-                color="tab:red", alpha=0.85)
-    re_axis.bar([i + bw for i in x], timeouts, width=bw * 2, label="Timeouts",
-                color="tab:purple", alpha=0.85)
-    re_axis.set_title("Retransmissions & timeouts (single run)")
-    re_axis.set_xticks(list(x), modes)
-    re_axis.set_ylabel("Count")
-    re_axis.grid(True, axis="y", alpha=0.3)
-    re_axis.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0),
-                   borderaxespad=0, fontsize="small")
-
     output.parent.mkdir(parents=True, exist_ok=True)
+    x = list(range(len(modes)))
+
+    def annotate_bars(axis, bars, values: list[float], fmt: str, offset: float) -> None:
+        for bar, value in zip(bars, values):
+            axis.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + offset,
+                fmt.format(value),
+                ha="center",
+                va="bottom",
+                fontsize="small",
+            )
+
+    def save_metric_bar(
+        path: Path,
+        values: list[float],
+        title: str,
+        ylabel: str,
+        color: str,
+        fmt: str,
+    ) -> None:
+        fig, axis = plt.subplots(figsize=(8, 4.8), constrained_layout=True)
+        bars = axis.bar(x, values, width=0.5, color=color, alpha=0.85)
+        axis.set_title(title)
+        axis.set_xticks(x, modes)
+        axis.set_ylabel(ylabel)
+        axis.grid(True, axis="y", alpha=0.3)
+        offset = max(max(values, default=0.0) * 0.02, 0.005)
+        annotate_bars(axis, bars, values, fmt, offset)
+        fig.savefig(path, dpi=140)
+        plt.close(fig)
+        print(f"saved {path}")
+
+    # --- CWND export ---
+    fig, axis = plt.subplots(figsize=(12, 5), constrained_layout=True)
+    plot_cwnd_histories(axis, histories, smooth_window)
+    axis.set_title("CWND over time (single run)")
+    axis.set_xlabel("Time (s)")
+    axis.set_ylabel("CWND (packets)")
+    axis.grid(True, alpha=0.3)
+    handles, _ = axis.get_legend_handles_labels()
+    if handles:
+        axis.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0),
+                    borderaxespad=0, fontsize="small")
     fig.savefig(output, dpi=140)
     plt.close(fig)
     print(f"saved {output}")
 
-    # --- CWND-only export ---
-    cwnd_output = output.with_name(f"{output.stem}_cwnd{output.suffix}")
-    fig2, axis2 = plt.subplots(figsize=(12, 5), constrained_layout=True)
-    plot_cwnd_histories(axis2, histories, smooth_window)
-    axis2.set_title("CWND over time (single run)")
-    axis2.set_xlabel("Time (s)")
-    axis2.set_ylabel("CWND (packets)")
-    axis2.grid(True, alpha=0.3)
-    axis2.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0),
-                 borderaxespad=0, fontsize="small")
-    fig2.savefig(cwnd_output, dpi=140)
-    plt.close(fig2)
-    print(f"saved {cwnd_output}")
+    save_metric_bar(
+        output.with_name(f"{output.stem}_rtt{output.suffix}"),
+        avg_rtt,
+        "Average RTT (single run)",
+        "Average RTT (ms)",
+        "tab:orange",
+        "{:.1f}",
+    )
+    save_metric_bar(
+        output.with_name(f"{output.stem}_throughput{output.suffix}"),
+        throughput,
+        "Throughput (single run)",
+        "Throughput (Mbps)",
+        "tab:blue",
+        "{:.3f}",
+    )
+    save_metric_bar(
+        output.with_name(f"{output.stem}_retransmissions{output.suffix}"),
+        retx,
+        "Retransmissions (single run)",
+        "Count",
+        "tab:red",
+        "{:.0f}",
+    )
+    save_metric_bar(
+        output.with_name(f"{output.stem}_timeouts{output.suffix}"),
+        timeouts,
+        "Timeouts (single run)",
+        "Count",
+        "tab:purple",
+        "{:.0f}",
+    )
 
 
 def plot_with_pillow(
@@ -276,18 +291,79 @@ def plot_with_pillow(
         draw.rectangle((right - 180, top + 26, right - 168, top + 38), fill="#f59e0b")
         draw.text((right - 162, top + 25), "Average RTT ms", fill="#0f172a", font=font)
 
+    def draw_metric_bars(image, box, title, values, ylabel, color, fmt):
+        draw = ImageDraw.Draw(image)
+        draw_axes(draw, box, title, "Controller", ylabel)
+        left, top, right, bottom = box
+        count = max(len(metrics), 1)
+        group_width = (right - left) / count
+        max_value = max(values, default=1.0) or 1.0
+        for index, (row, value) in enumerate(zip(metrics, values)):
+            center = left + group_width * (index + 0.5)
+            bar_width = max(18, int(group_width * 0.28))
+            bar_height = int((value / max_value) * (bottom - top - 28))
+            draw.rectangle(
+                (
+                    int(center - bar_width / 2),
+                    bottom - bar_height,
+                    int(center + bar_width / 2),
+                    bottom,
+                ),
+                fill=color,
+            )
+            draw.text((int(center - 28), bottom + 8), row["mode"], fill="#0f172a", font=font)
+            draw.text(
+                (int(center - 24), bottom - bar_height - 14),
+                fmt.format(value),
+                fill="#0f172a",
+                font=font,
+            )
+
     output.parent.mkdir(parents=True, exist_ok=True)
-    image = Image.new("RGB", (1540, 1120), "white")
-    draw_cwnd(image, (90, 70, 1480, 520))
-    draw_bars(image, (90, 630, 1480, 1030))
+    image = Image.new("RGB", (1540, 650), "white")
+    draw_cwnd(image, (90, 70, 1480, 560))
     image.save(output)
     print(f"saved {output} (Pillow fallback)")
 
-    cwnd_output = output.with_name(f"{output.stem}_cwnd{output.suffix}")
-    cwnd_image = Image.new("RGB", (1540, 650), "white")
-    draw_cwnd(cwnd_image, (90, 70, 1480, 560))
-    cwnd_image.save(cwnd_output)
-    print(f"saved {cwnd_output} (Pillow fallback)")
+    metric_specs = [
+        (
+            output.with_name(f"{output.stem}_rtt{output.suffix}"),
+            [float(row["avg_rtt_ms"]) for row in metrics],
+            "Average RTT (single run)",
+            "Average RTT (ms)",
+            "#f59e0b",
+            "{:.1f}",
+        ),
+        (
+            output.with_name(f"{output.stem}_throughput{output.suffix}"),
+            [float(row["throughput_mbps"]) for row in metrics],
+            "Throughput (single run)",
+            "Throughput (Mbps)",
+            "#2563eb",
+            "{:.3f}",
+        ),
+        (
+            output.with_name(f"{output.stem}_retransmissions{output.suffix}"),
+            [float(row["retransmissions"]) for row in metrics],
+            "Retransmissions (single run)",
+            "Count",
+            "#dc2626",
+            "{:.0f}",
+        ),
+        (
+            output.with_name(f"{output.stem}_timeouts{output.suffix}"),
+            [float(row["timeout_events"]) for row in metrics],
+            "Timeouts (single run)",
+            "Count",
+            "#7c3aed",
+            "{:.0f}",
+        ),
+    ]
+    for path, values, title, ylabel, color, fmt in metric_specs:
+        metric_image = Image.new("RGB", (980, 620), "white")
+        draw_metric_bars(metric_image, (90, 70, 920, 520), title, values, ylabel, color, fmt)
+        metric_image.save(path)
+        print(f"saved {path} (Pillow fallback)")
 
 
 def main() -> None:

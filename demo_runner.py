@@ -458,14 +458,27 @@ def write_dashboard(
 
     notes_html = "".join(f"<li>{html.escape(note)}</li>" for note in notes) or "<li>No skipped optional step.</li>"
     plots_html = "".join(f"<li>{html.escape(status)}</li>" for status in plot_status)
-    main_plot = result_dir / "comparison_main.png"
+    main_plots = [
+        (result_dir / "comparison_main.png", "CWND 对比", "main comparison cwnd"),
+        (result_dir / "comparison_main_rtt.png", "平均 RTT 对比", "main comparison rtt"),
+        (result_dir / "comparison_main_throughput.png", "吞吐量对比", "main comparison throughput"),
+        (result_dir / "comparison_main_retransmissions.png", "重传次数对比", "main comparison retransmissions"),
+        (result_dir / "comparison_main_timeouts.png", "Timeout 次数对比", "main comparison timeouts"),
+    ]
     drop_cwnd_plot = result_dir / "comparison_drop.png"
     drop_metrics_plot = result_dir / "comparison_drop_metrics.png"
-    main_plot_image = (
-        f'<img src="{html.escape(str(main_plot.relative_to(result_dir)))}" alt="main comparison">'
-        if main_plot.exists()
-        else "<p>main comparison plot was not generated.</p>"
-    )
+
+    def image_panel(path: Path, title: str, alt: str) -> str:
+        if not path.exists():
+            return f"<div><h3>{html.escape(title)}</h3><p>plot was not generated.</p></div>"
+        return (
+            f"<div><h3>{html.escape(title)}</h3>"
+            f"{html_link(path, result_dir)}<br>"
+            f'<img src="{html.escape(str(path.relative_to(result_dir)))}" alt="{html.escape(alt)}">'
+            "</div>"
+        )
+
+    main_plot_images = "".join(image_panel(path, title, alt) for path, title, alt in main_plots)
     drop_cwnd_image = (
         f'<img src="{html.escape(str(drop_cwnd_plot.relative_to(result_dir)))}" alt="CWND recovery">'
         if drop_cwnd_plot.exists()
@@ -511,14 +524,11 @@ def write_dashboard(
   <h2>图表</h2>
   <ul>{plots_html}</ul>
   <div class="grid">
-    <div><h3>AIMD / Q-Learning / DQN 对比</h3>{html_link(main_plot, result_dir)}<br>{main_plot_image}</div>
+    {main_plot_images}
     <div><h3>带宽突变 — CWND 恢复</h3>{html_link(drop_cwnd_plot, result_dir)}<br>{drop_cwnd_image}</div>
-	    <div><h3>带宽突变 — 减半后指标</h3>{html_link(drop_metrics_plot, result_dir)}<br>{drop_metrics_image}</div>
+    <div><h3>带宽突变 — 减半后指标</h3>{html_link(drop_metrics_plot, result_dir)}<br>{drop_metrics_image}</div>
   </div>
 
-  <h2>如何复现</h2>
-  <p>双击项目根目录的 <code>Run_Demo.command</code>，或在终端执行：</p>
-  <pre><code>python3 demo_runner.py</code></pre>
 </body>
 </html>
 """
