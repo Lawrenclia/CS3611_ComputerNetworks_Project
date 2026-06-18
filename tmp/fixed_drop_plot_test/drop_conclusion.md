@@ -1,29 +1,29 @@
 ## Bandwidth Halving Recovery: AIMD vs Q-Learning
 
-When bandwidth is suddenly halved mid-transmission (t=2.64s, after
+When bandwidth is suddenly halved mid-transmission (t=2.55s, after
 150/300 packets):
 
 **1. AIMD overshoots.** Before halving, CWND reached
-8.8 pkts, fully saturating the queue.
+8.3 pkts, fully saturating the queue.
 The inflated window floods the bottleneck after the drop, causing
-36 retransmissions and
-26 timeouts post-halving. AIMD only
+52 retransmissions and
+34 timeouts post-halving. AIMD only
 reduces CWND after loss/timeout — a *reactive* signal — delaying
-recovery to 0.13s.
+recovery to 0.61s.
 
 **2. Q-Learning adapts proactively.** Pre-halving CWND of
-6.3 is lower than AIMD's because the
+3.9 is lower than AIMD's because the
 policy learned to *hold* on rising RTT, preserving queue headroom.
 After halving, adaptation (epsilon boosted to 0.15, alpha raised to
 0.15, moderately amplified loss/RTT penalties) causes the agent to unlearn
-large-window preferences. Recovery: 0.20s
+large-window preferences. Recovery: 1.71s
 (faster vs AIMD).
 
 **3. Post-halving comparison:**
-- Throughput: Q-Learning +0.081 Mbps vs AIMD
-- RTT: Q-Learning +53.2 ms vs AIMD
-- Retransmissions: Q-Learning more by 22
-- Recovery: 0.20s (QL) vs 0.13s (AIMD)
+- Throughput: Q-Learning +0.231 Mbps vs AIMD
+- RTT: Q-Learning -89.8 ms vs AIMD
+- Retransmissions: Q-Learning fewer by 15
+- Recovery: 1.71s (QL) vs 0.61s (AIMD)
 
 **4. Key insight:** AIMD relies on packet loss as a *lagging* congestion
 signal. Q-Learning uses RTT trends as an *early* signal, allowing it to

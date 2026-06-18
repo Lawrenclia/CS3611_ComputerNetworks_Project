@@ -609,7 +609,10 @@ class DropExperiment:
 
         avg_cwnd_pre = sum(c for _, c in before) / len(before) if before else 0
         avg_cwnd_post = sum(c for _, c in after) / len(after) if after else 0
-        avg_rtt_post = sum(r.rtt_ms for r in t_after) / len(t_after) if t_after else 0
+        stable_rtt_after = [r.srtt_ms for r in t_after if r.srtt_ms > 0]
+        if not stable_rtt_after:
+            stable_rtt_after = [r.rtt_ms for r in t_after if r.rtt_ms > 0]
+        avg_rtt_post = sum(stable_rtt_after) / len(stable_rtt_after) if stable_rtt_after else 0
         retx_post = sum(r.retransmissions for r in t_after)
         to_post = sum(r.timeouts for r in t_after)
 
@@ -669,14 +672,44 @@ def make_plots(aimd: dict, ql: dict, out: Path):
         print("[PLOT] matplotlib missing")
         return
 
-    ht = aimd["bandwidth_halving_time_s"]
+    rtt_plot_cap_ms = 500.0
+    recovery_times = [
+        data["recovery_time_s"]
+        for data in (aimd, ql)
+        if data["recovery_time_s"] != float("inf") and data["recovery_time_s"] > 0
+    ]
+    display_left = -3.0
+    display_right = max([6.0] + [rt + 2.0 for rt in recovery_times])
 
-    # ── Figure 1: CWND + RTT recovery ──
+    def relative_cwnd(data: dict) -> tuple[list[float], list[float]]:
+        ht = data["bandwidth_halving_time_s"]
+        return [t - ht for t, _ in data["cwnd_history"]], [c for _, c in data["cwnd_history"]]
+
+    def relative_srtt(data: dict) -> tuple[list[float], list[float], int]:
+        ht = data["bandwidth_halving_time_s"]
+        ts: list[float] = []
+        rs: list[float] = []
+        omitted = 0
+        for record in data["telemetry"]:
+            value = record.srtt_ms or record.rtt_ms
+            if value <= 0:
+                continue
+            if value > rtt_plot_cap_ms:
+                omitted += 1
+                continue
+            ts.append(record.time_s - ht)
+            rs.append(value)
+        return ts, rs, omitted
+
+    def visible_pairs(ts: list[float], values: list[float]) -> list[tuple[float, float]]:
+        pairs = [(t, v) for t, v in zip(ts, values) if display_left <= t <= display_right]
+        return pairs or list(zip(ts, values))
+
+    # ── Figure 1: CWND + SRTT recovery ──
     fig1, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 9), constrained_layout=True)
 
     for label, data, color in [("AIMD", aimd, "#2563eb"), ("Q-Learning", ql, "#d97706")]:
-        ts = [t for t, _ in data["cwnd_history"]]
-        cs = [c for _, c in data["cwnd_history"]]
+        ts, cs = relative_cwnd(data)
         # Raw step trace
         ax1.step(ts, cs, where="post", label=label, lw=1.0, color=color, alpha=0.5)
         # Smoothed overlay (moving average, window=3)
@@ -684,13 +717,24 @@ def make_plots(aimd: dict, ql: dict, out: Path):
             smooth = np.convolve(cs, np.ones(3)/3, mode="same")
             ax1.plot(ts, smooth, lw=2.0, color=color, alpha=1.0,
                      label=f"{label} (smoothed)" if label == "AIMD" else None)
-        rts = [t for t, _ in data["rtt_history"]]
-        rr = [r * 1000 for _, r in data["rtt_history"]]
-        ax2.plot(rts, rr, label=label, lw=1.2, alpha=0.8, color=color)
+        rts, rr, omitted = relative_srtt(data)
+        rtt_pairs = visible_pairs(rts, rr)
+        rts = [t for t, _ in rtt_pairs]
+        rr = [r for _, r in rtt_pairs]
+        ax2.plot(rts, rr, label=f"{label} SRTT", lw=1.2, alpha=0.85, color=color)
+        if omitted:
+            ax2.text(
+                0.01,
+                0.95 - 0.08 * (0 if label == "AIMD" else 1),
+                f"{label}: omitted {omitted} RTT outlier(s) > {rtt_plot_cap_ms:.0f} ms",
+                transform=ax2.transAxes,
+                fontsize=8,
+                color=color,
+                va="top",
+            )
 
     # Annotate ACK compression spike for AIMD
-    aimd_ts = [t for t, _ in aimd["cwnd_history"]]
-    aimd_cs = [c for _, c in aimd["cwnd_history"]]
+    aimd_ts, aimd_cs = relative_cwnd(aimd)
     spike_idx = None
     for i in range(1, len(aimd_cs) - 1):
         if aimd_cs[i] > aimd_cs[i-1] * 3 and aimd_cs[i] > aimd_cs[i+1] * 2:
@@ -706,8 +750,8 @@ def make_plots(aimd: dict, ql: dict, out: Path):
                      bbox=dict(boxstyle="round,pad=0.3", facecolor="#eff6ff", alpha=0.8))
 
     for ax in (ax1, ax2):
-        ax.axvline(x=ht, color="red", ls="--", lw=1.8, alpha=0.7,
-                   label=f"Bandwidth halving (t={ht:.2f}s)")
+        ax.axvline(x=0.0, color="red", ls="--", lw=1.8, alpha=0.7,
+                   label="Bandwidth halving (relative t=0)")
         ax.legend(loc="upper right", fontsize=9)
         ax.grid(True, alpha=0.3)
 
@@ -715,25 +759,29 @@ def make_plots(aimd: dict, ql: dict, out: Path):
     for data, color, label, y_off in [
         (aimd, "#2563eb", "AIMD", 3), (ql, "#d97706", "Q-L", -5)
     ]:
-        peak = max(data["cwnd_history"], key=lambda x: x[1])
+        ts, cs = relative_cwnd(data)
+        peak = max(visible_pairs(ts, cs), key=lambda item: item[1])
         ax1.annotate(f"{label} peak={peak[1]:.0f}", xy=peak,
                      xytext=(peak[0] + 0.2, peak[1] + y_off), fontsize=10, color=color,
                      arrowprops=dict(arrowstyle="->", color=color, alpha=0.5), fontweight="bold")
 
     # Recovery spans
-    for data, color, label, y in [(aimd, "#2563eb", "AIMD", 1.5), (ql, "#d97706", "Q-L", 1.0)]:
+    for data, color, label, y in [(aimd, "#2563eb", "AIMD", 2.2), (ql, "#d97706", "Q-L", 1.0)]:
         rt = data["recovery_time_s"]
         if rt != float("inf") and rt > 0:
-            ax1.axvspan(ht, ht + rt, alpha=0.08, color=color)
-            ax1.text(ht + rt / 2, y, f"{label} recovery\n{rt:.2f}s",
-                     ha="center", fontsize=8, color=color, fontweight="bold")
+            ax1.axvspan(0.0, rt, alpha=0.08, color=color)
+            ax1.text(rt + 0.08, y, f"{label} recovery\n{rt:.2f}s",
+                     ha="left", fontsize=8, color=color, fontweight="bold")
 
-    ax1.set_xlabel("Time (s)")
+    ax1.set_xlabel("Time relative to bandwidth halving (s)")
     ax1.set_ylabel("CWND (packets)")
-    ax1.set_title("CWND Recovery under Bandwidth Halving")
-    ax2.set_xlabel("Time (s)")
-    ax2.set_ylabel("RTT (ms)")
-    ax2.set_title("RTT Evolution under Bandwidth Halving")
+    ax1.set_title("CWND Recovery aligned at Bandwidth Halving")
+    ax1.set_xlim(display_left, display_right)
+    ax2.set_xlabel("Time relative to bandwidth halving (s)")
+    ax2.set_ylabel("SRTT (ms)")
+    ax2.set_ylim(bottom=0, top=rtt_plot_cap_ms)
+    ax2.set_xlim(display_left, display_right)
+    ax2.set_title("Smoothed RTT Evolution aligned at Bandwidth Halving")
     fig1.savefig(out / "cwnd_recovery.png", dpi=150)
     plt.close(fig1)
 

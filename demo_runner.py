@@ -292,67 +292,99 @@ def plot_drop_comparison(root: Path, result_dir: Path) -> str:
 
     aimd = results["aimd"]
     ql = results["qlearning"]
-    ht = aimd["bandwidth_halving_time_s"]
+    rtt_plot_cap_ms = 500.0
+    recovery_times = [
+        r["recovery_time_s"]
+        for r in (aimd, ql)
+        if r["recovery_time_s"] != float("inf") and r["recovery_time_s"] > 0
+    ]
+    display_left = -3.0
+    display_right = max([6.0] + [rt + 2.0 for rt in recovery_times])
 
-    # Load CWND history from telemetry CSVs
-    def load_cwnd(path):
-        ts, cs = [], []
+    def load_series(path: Path, halving_time: float, value_field: str, max_value: float | None = None):
+        ts, values = [], []
+        omitted = 0
         with path.open(newline="") as f:
             for r in csv.DictReader(f):
-                ts.append(float(r["time_s"]))
-                cs.append(float(r["cwnd"]))
-        return ts, cs
+                value = float(r.get(value_field, 0) or 0)
+                if value <= 0:
+                    continue
+                if max_value is not None and value > max_value:
+                    omitted += 1
+                    continue
+                ts.append(float(r["time_s"]) - halving_time)
+                values.append(value)
+        return ts, values, omitted
 
-    aimd_t, aimd_c = load_cwnd(exp_out / "telemetry_aimd.csv")
-    ql_t, ql_c = load_cwnd(exp_out / "telemetry_qlearn.csv")
+    def visible_pairs(ts, values):
+        pairs = [(t, v) for t, v in zip(ts, values) if display_left <= t <= display_right]
+        return pairs or list(zip(ts, values))
 
-    # ── Figure 1: CWND Recovery + RTT ──
+    aimd_t, aimd_c, _ = load_series(exp_out / "telemetry_aimd.csv", aimd["bandwidth_halving_time_s"], "cwnd")
+    ql_t, ql_c, _ = load_series(exp_out / "telemetry_qlearn.csv", ql["bandwidth_halving_time_s"], "cwnd")
+
+    # ── Figure 1: CWND Recovery + SRTT ──
     fig1, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 9), constrained_layout=True)
 
     ax1.step(aimd_t, aimd_c, where="post", label="AIMD", lw=1.6, color="#2563eb")
     ax1.step(ql_t, ql_c, where="post", label="Q-Learning", lw=1.6, color="#d97706")
-    ax1.axvline(x=ht, color="red", ls="--", lw=1.8, alpha=0.7,
-                label=f"Bandwidth halving (t={ht:.2f}s)")
+    ax1.axvline(x=0.0, color="red", ls="--", lw=1.8, alpha=0.7,
+                label="Bandwidth halving (relative t=0)")
 
     # Peaks
-    for data, color, label, yoff in [(aimd_c, "#2563eb", "AIMD", 3), (ql_c, "#d97706", "Q-L", -5)]:
-        peak_v = max(data)
-        peak_i = data.index(peak_v)
-        ax1.annotate(f"{label} peak={peak_v:.0f}", xy=(aimd_t[peak_i] if label == "AIMD" else ql_t[peak_i], peak_v),
+    for ts, data, color, label, yoff in [
+        (aimd_t, aimd_c, "#2563eb", "AIMD", 3),
+        (ql_t, ql_c, "#d97706", "Q-L", -5),
+    ]:
+        peak_t, peak_v = max(visible_pairs(ts, data), key=lambda item: item[1])
+        ax1.annotate(f"{label} peak={peak_v:.0f}", xy=(peak_t, peak_v),
                      xytext=(0, yoff), textcoords="offset points", fontsize=10, color=color,
                      arrowprops=dict(arrowstyle="->", color=color, alpha=0.5), fontweight="bold")
 
     # Recovery spans
-    for res, color, label, y in [(aimd, "#2563eb", "AIMD", 1.5), (ql, "#d97706", "Q-L", 1.0)]:
+    for res, color, label, y in [(aimd, "#2563eb", "AIMD", 2.2), (ql, "#d97706", "Q-L", 1.0)]:
         rt = res["recovery_time_s"]
         if rt != float("inf") and rt > 0:
-            ax1.axvspan(ht, ht + rt, alpha=0.08, color=color)
-            ax1.text(ht + rt / 2, y, f"{label} recovery\n{rt:.2f}s",
-                     ha="center", fontsize=8, color=color, fontweight="bold")
+            ax1.axvspan(0.0, rt, alpha=0.08, color=color)
+            ax1.text(rt + 0.08, y, f"{label} recovery\n{rt:.2f}s",
+                     ha="left", fontsize=8, color=color, fontweight="bold")
 
-    ax1.set_xlabel("Time (s)")
+    ax1.set_xlabel("Time relative to bandwidth halving (s)")
     ax1.set_ylabel("CWND (packets)")
-    ax1.set_title("CWND Recovery under Bandwidth Halving")
+    ax1.set_title("CWND Recovery aligned at Bandwidth Halving")
+    ax1.set_xlim(display_left, display_right)
     ax1.legend(loc="upper right", fontsize=9)
     ax1.grid(True, alpha=0.3)
 
-    # RTT subplot
-    def load_rtt(path):
-        ts, rs = [], []
-        with path.open(newline="") as f:
-            for r in csv.DictReader(f):
-                ts.append(float(r["time_s"]))
-                rs.append(float(r.get("rtt_ms", 0)))
-        return ts, rs
-
-    for label, color in [("AIMD", "#2563eb"), ("Q-Learning", "#d97706")]:
+    # SRTT subplot, aligned to each run's own bandwidth halving time.
+    for label, color, result in [("AIMD", "#2563eb", aimd), ("Q-Learning", "#d97706", ql)]:
         fname = f"telemetry_{'aimd' if label == 'AIMD' else 'qlearn'}.csv"
-        rt_ts, rt_rs = load_rtt(exp_out / fname)
-        ax2.plot(rt_ts, rt_rs, label=label, lw=1.2, alpha=0.8, color=color)
-    ax2.axvline(x=ht, color="red", ls="--", lw=1.8, alpha=0.7)
-    ax2.set_xlabel("Time (s)")
-    ax2.set_ylabel("RTT (ms)")
-    ax2.set_title("RTT Evolution under Bandwidth Halving")
+        rt_ts, rt_rs, omitted = load_series(
+            exp_out / fname,
+            result["bandwidth_halving_time_s"],
+            "srtt_ms",
+            max_value=rtt_plot_cap_ms,
+        )
+        rt_pairs = visible_pairs(rt_ts, rt_rs)
+        rt_ts = [t for t, _ in rt_pairs]
+        rt_rs = [r for _, r in rt_pairs]
+        ax2.plot(rt_ts, rt_rs, label=f"{label} SRTT", lw=1.2, alpha=0.85, color=color)
+        if omitted:
+            ax2.text(
+                0.01,
+                0.95 - 0.08 * (0 if label == "AIMD" else 1),
+                f"{label}: omitted {omitted} RTT outlier(s) > {rtt_plot_cap_ms:.0f} ms",
+                transform=ax2.transAxes,
+                fontsize=8,
+                color=color,
+                va="top",
+            )
+    ax2.axvline(x=0.0, color="red", ls="--", lw=1.8, alpha=0.7)
+    ax2.set_xlabel("Time relative to bandwidth halving (s)")
+    ax2.set_ylabel("SRTT (ms)")
+    ax2.set_ylim(bottom=0, top=rtt_plot_cap_ms)
+    ax2.set_xlim(display_left, display_right)
+    ax2.set_title("Smoothed RTT Evolution aligned at Bandwidth Halving")
     ax2.legend(loc="upper right", fontsize=9)
     ax2.grid(True, alpha=0.3)
 
